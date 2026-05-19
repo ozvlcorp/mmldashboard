@@ -1,0 +1,37 @@
+# OY Analytics — Netlify config
+# Документация: https://docs.netlify.com/frameworks/next-js/
+
+[build]
+  command = "npm run build"
+  # publish папку Netlify Next.js plugin аниклайди — кул билан кёрсатиш керак эмас
+
+[build.environment]
+  # Next.js 16 учун Node 20+
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# ----------------------------------------------------------------------------
+# Заголовки — нужны, чтобы виджет открывался в iframe МойСклад.
+# Дублируют значения из next.config.ts (двойная страховка).
+# ----------------------------------------------------------------------------
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "ALLOWALL"
+    Content-Security-Policy = "frame-ancestors 'self' https://online.moysklad.ru https://*.moysklad.ru;"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Content-Type-Options = "nosniff"
+
+# Кэширование статики из /_next/static (immutable хеши)
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Логотип, favicon — кэшируем на сутки
+[[headers]]
+  for = "/*.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"

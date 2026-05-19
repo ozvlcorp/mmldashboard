@@ -1,0 +1,38 @@
+{
+  "$schema": "https://online.moysklad.ru/api/vendor/1.0/schemas/app-descriptor.json",
+  "appName": {
+    "ru": "MML — Аналитика товаров",
+    "en": "MML Analytics"
+  },
+  "description": {
+    "ru": "Складская аналитика, ABC/XYZ/RFM анализ. Маржа, оборачиваемость, заморозка капитала, потери из-за OOS.",
+    "en": "Inventory analytics with ABC, XYZ, RFM analyses."
+  },
+  "vendorApi": {
+    "endpointBasePath": "https://YOUR-APP.vercel.app/api/moysklad"
+  },
+  "iframe": {
+    "supportedLocales": ["ru", "uz_UZ", "en"],
+    "openFromWidget": true
+  },
+  "widgets": [
+    {
+      "name": {
+        "ru": "MML аналитика",
+        "en": "MML Analytics"
+      },
+      "iframe": {
+        "openInPopup": false,
+        "url": "https://YOUR-APP.vercel.app/widget"
+      },
+      "location": "tab",
+      "entityTypes": ["product", "assortment"],
+      "supports": ["mainSection"]
+    }
+  ],
+  "access": {
+    "scopes": [
+      "admin"
+    ]
+  }
+}

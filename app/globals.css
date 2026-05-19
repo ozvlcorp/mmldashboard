@@ -1,0 +1,165 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Surface system — Crancy-style soft light theme */
+  --color-bg: #f4f7fe;
+  --color-fg: #1b1d21;
+  --color-fg-soft: #2a2c33;
+  --color-muted: #f1f4f9;
+  --color-muted-fg: #6b7280;
+  --color-border: #e6e9ef;
+  --color-border-soft: #f0f2f7;
+  --color-card: #ffffff;
+  --color-sidebar: #ffffff;
+  --color-sidebar-active: #ecefff;
+
+  /* Brand colors — vivid indigo accent */
+  --color-primary: #4a65ff;
+  --color-primary-hover: #3a55ee;
+  --color-primary-fg: #ffffff;
+  --color-primary-soft: #ecefff;
+  --color-primary-soft-fg: #2a3fcc;
+
+  /* Semantic */
+  --color-success: #16a34a;
+  --color-success-soft: #dcfce7;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fef3c7;
+  --color-danger: #ef4444;
+  --color-danger-soft: #fee2e2;
+  --color-info: #0ea5e9;
+  --color-info-soft: #e0f2fe;
+
+  /* Accent palette for KPI tiles */
+  --color-accent-1: #4a65ff;
+  --color-accent-2: #f59e0b;
+  --color-accent-3: #10b981;
+  --color-accent-4: #ec4899;
+  --color-accent-5: #8b5cf6;
+  --color-accent-6: #06b6d4;
+
+  --font-sans: 'Inter', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+
+  --radius-sm: 0.5rem;
+  --radius: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-card-hover: 0 10px 25px -5px rgb(0 0 0 / 0.06), 0 4px 10px -3px rgb(0 0 0 / 0.04);
+  --shadow-popover: 0 25px 50px -12px rgb(0 0 0 / 0.15);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+  }
+
+  table {
+    border-collapse: collapse;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--color-muted-fg);
+  }
+}
+
+/* ==========================================================================
+   Минималистичные анимации
+   ========================================================================== */
+@keyframes oy-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes oy-fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes oy-fade-in-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes oy-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes oy-slide-from-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes oy-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Анимации входа: forwards для устойчивости при скрытой вкладке */
+.oy-anim-fade {
+  animation: oy-fade-in 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.oy-anim-page {
+  animation: oy-fade-in-up 360ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.oy-anim-card {
+  animation: oy-fade-in-up 460ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.oy-anim-scale {
+  animation: oy-scale-in 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.oy-anim-slide {
+  animation: oy-slide-from-right 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Stagger — задержки для последовательного появления */
+.oy-stagger-1 { animation-delay: 40ms; }
+.oy-stagger-2 { animation-delay: 80ms; }
+.oy-stagger-3 { animation-delay: 120ms; }
+.oy-stagger-4 { animation-delay: 160ms; }
+.oy-stagger-5 { animation-delay: 200ms; }
+.oy-stagger-6 { animation-delay: 240ms; }
+
+/* Плавные transitions по умолчанию для интерактивных элементов */
+button, a, [role='tab'], [data-resize] {
+  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Не анимировать когда пользователь предпочитает reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
