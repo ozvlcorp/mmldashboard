@@ -3,7 +3,7 @@
 
 [build]
   command = "npm run build"
-  # publish папку Netlify Next.js plugin аниклайди — кул билан кёрсатиш керак эмас
+  publish = ".next"
 
 [build.environment]
   # Next.js 16 учун Node 20+
