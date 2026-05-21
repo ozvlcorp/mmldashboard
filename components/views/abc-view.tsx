@@ -58,7 +58,7 @@ export function AbcView({
     },
     {
       key: 'class',
-      header: 'Класс',
+      header: t('col.class'),
       help: 'A — топ ~80% выручки (главные товары), B — ещё ~15% (нужно поддерживать), C — оставшиеся ~5% (можно сократить).',
       align: 'center',
       width: 90,
@@ -68,7 +68,7 @@ export function AbcView({
     },
     {
       key: 'name',
-      header: 'Товар',
+      header: t('col.product'),
       align: 'left',
       width: 280,
       minWidth: 160,
@@ -89,7 +89,7 @@ export function AbcView({
     },
     {
       key: 'share',
-      header: 'Доля',
+      header: t('col.share'),
       help: 'Какую долю от общей выручки приносит этот товар.',
       align: 'right',
       width: 110,
@@ -100,10 +100,11 @@ export function AbcView({
     },
     {
       key: 'cumShare',
-      header: 'Накопл.',
+      header: t('col.cumShare'),
       help: 'Накопленная доля — сумма долей всех товаров до этого (включая текущий). Когда переходит за 80% — товары становятся классом B; за 95% — классом C.',
       align: 'right',
-      width: 180,
+      width: 210,
+      minWidth: 180,
       render: (r) => (
         <div className="inline-flex items-center gap-2 justify-end w-full">
           <div className="w-16 h-1.5 rounded-full bg-(--color-muted) overflow-hidden">

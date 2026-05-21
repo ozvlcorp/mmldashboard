@@ -4,16 +4,24 @@ import { Search, Bell, Calendar, ChevronDown } from 'lucide-react';
 import { useT } from '@/lib/i18n/provider';
 import { LanguageSwitcher } from '@/components/language-switcher';
 
+const PERIOD_OPTIONS = [7, 14, 30, 60, 90, 180, 365];
+
 export function Header({
   title,
   subtitle,
   source,
+  periodDays,
+  onChangePeriod,
 }: {
   title: string;
   subtitle?: string;
   source: 'demo' | 'moysklad' | 'upload';
+  periodDays?: number;
+  onChangePeriod?: (d: number) => void;
 }) {
   const { t } = useT();
+  const periodLabel = periodDays ? `${periodDays} дн.` : t('app.period.30d');
+  const interactive = !!onChangePeriod && !!periodDays;
   return (
     <div className="sticky top-0 z-30 bg-(--color-bg)/85 backdrop-blur-md border-b border-(--color-border)">
       <div className="px-6 lg:px-8 py-4 flex items-center gap-4">
@@ -49,11 +57,36 @@ export function Header({
             />
           </div>
 
-          <button className="h-9 inline-flex items-center gap-2 px-3 rounded-lg bg-(--color-card) border border-(--color-border) text-[13px] font-medium hover:bg-(--color-muted) hover:border-(--color-primary)/40">
-            <Calendar size={15} className="text-(--color-muted-fg)" />
-            {t('app.period.30d')}
-            <ChevronDown size={14} className="text-(--color-muted-fg)" />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              disabled={!interactive}
+              className={
+                'h-9 inline-flex items-center gap-2 px-3 rounded-lg bg-(--color-card) border border-(--color-border) text-[13px] font-medium ' +
+                (interactive
+                  ? 'hover:bg-(--color-muted) hover:border-(--color-primary)/40 cursor-pointer'
+                  : 'opacity-70 cursor-default')
+              }
+            >
+              <Calendar size={15} className="text-(--color-muted-fg)" />
+              {periodLabel}
+              <ChevronDown size={14} className="text-(--color-muted-fg)" />
+            </button>
+            {interactive && (
+              <select
+                aria-label={t('app.period.30d')}
+                value={periodDays}
+                onChange={(e) => onChangePeriod!(Number(e.target.value))}
+                className="absolute inset-0 cursor-pointer opacity-0"
+              >
+                {PERIOD_OPTIONS.map((d) => (
+                  <option key={d} value={d}>
+                    {d} дн.
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
           <LanguageSwitcher />
 

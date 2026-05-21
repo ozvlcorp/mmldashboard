@@ -41,6 +41,8 @@ export function Dashboard({
   debtorsError,
   onCreateDebtorTask,
   assigneeName,
+  periodDays,
+  onChangePeriod,
 }: {
   inventory: InventoryInput[];
   abc: AbcInput[];
@@ -56,6 +58,8 @@ export function Dashboard({
   debtorsError?: string | null;
   onCreateDebtorTask?: CreateTaskFn;
   assigneeName?: string | null;
+  periodDays?: number;
+  onChangePeriod?: (d: number) => void;
 }) {
   const [active, setActive] = useState<NavKey>('inventory');
   const { t, lang, nonce } = useT();
@@ -65,7 +69,13 @@ export function Dashboard({
     <div className="flex min-h-screen bg-(--color-bg)" key={`${lang}-${nonce}`}>
       <Sidebar active={active} onSelect={setActive} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <Header title={t(meta.title)} subtitle={t(meta.subtitle)} source={source} />
+        <Header
+          title={t(meta.title)}
+          subtitle={t(meta.subtitle)}
+          source={source}
+          periodDays={periodDays}
+          onChangePeriod={onChangePeriod}
+        />
         <main className="flex-1 px-4 lg:px-8 py-6 lg:py-8">
           <div key={active} className="oy-anim-page">
             {active === 'inventory' && (

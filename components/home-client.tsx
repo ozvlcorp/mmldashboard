@@ -145,16 +145,27 @@ export function HomeClient() {
     setAssignee(null);
   }
 
-  function manualRefresh() {
-    const token = sessionStorage.getItem(TOKEN_KEY);
-    if (!token) return;
-    const paramsRaw = sessionStorage.getItem(PARAMS_KEY);
+  function readStoredParams(): ConnectParams {
+    const raw = sessionStorage.getItem(PARAMS_KEY);
     let params: ConnectParams = { periodDays: 30, normDays: 10 };
     try {
-      if (paramsRaw) params = { ...params, ...JSON.parse(paramsRaw) };
+      if (raw) params = { ...params, ...JSON.parse(raw) };
     } catch {
       /* ignore */
     }
+    return params;
+  }
+
+  function manualRefresh() {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    void load(token, readStoredParams());
+  }
+
+  function changePeriod(periodDays: number) {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    const params = { ...readStoredParams(), periodDays };
     void load(token, params);
   }
 
@@ -241,6 +252,8 @@ export function HomeClient() {
         debtorsError={debtorsError}
         onCreateDebtorTask={isLive && assignee ? createTask : undefined}
         assigneeName={assignee?.name ?? null}
+        periodDays={data?.meta.periodDays}
+        onChangePeriod={isLive ? changePeriod : undefined}
       />
 
       <ConnectDialog
