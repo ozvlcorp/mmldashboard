@@ -209,6 +209,16 @@ export const dict = {
     'tg.cleared': 'Конфиг очищен.',
     'tg.statusOn': 'Подключён',
     'tg.statusOff': 'Не подключён',
+
+    'xyz.about.title': 'Что такое XYZ анализ',
+    'xyz.about.desc':
+      'Делит товары по стабильности продаж. Считаем CV (коэффициент вариации) за 8 недель: чем меньше разброс — тем стабильнее спрос.',
+    'xyz.about.x': 'CV ≤ 10%. Продаются ровно каждую неделю.',
+    'xyz.about.x.action': 'Можно работать «just in time» — минимум запасов.',
+    'xyz.about.y': 'CV 10–25%. Есть сезонность или колебания.',
+    'xyz.about.y.action': 'Держите небольшой страховой запас под пик.',
+    'xyz.about.z': 'CV > 25%. Спрос непредсказуемый или редкий.',
+    'xyz.about.z.action': 'Большой страховой запас или работа под заказ.',
   },
 
   uz: {
@@ -420,6 +430,16 @@ export const dict = {
     'tg.cleared': 'Konfig tozalandi.',
     'tg.statusOn': 'Ulangan',
     'tg.statusOff': 'Ulanmagan',
+
+    'xyz.about.title': 'XYZ tahlil nima',
+    'xyz.about.desc':
+      "Mahsulotlarni sotuv barqarorligi bo'yicha ajratadi. 8 hafta uchun CV (variatsiya koeffitsiyenti) — qancha kichik bo'lsa, talab shuncha barqaror.",
+    'xyz.about.x': "CV ≤ 10%. Har hafta deyarli teng sotiladi.",
+    'xyz.about.x.action': "«Just in time» rejimi mumkin — minimal zaxira.",
+    'xyz.about.y': "CV 10–25%. Mavsumiylik yoki tebranishlar bor.",
+    'xyz.about.y.action': "Cho'qqi uchun kichik zaxira saqlang.",
+    'xyz.about.z': "CV > 25%. Talab tartibsiz yoki kam.",
+    'xyz.about.z.action': "Katta zaxira yoki buyurtma bo'yicha ishlash.",
   },
 
   en: {
@@ -626,6 +646,16 @@ export const dict = {
     'tg.cleared': 'Config cleared.',
     'tg.statusOn': 'Connected',
     'tg.statusOff': 'Not connected',
+
+    'xyz.about.title': 'What is XYZ analysis',
+    'xyz.about.desc':
+      'Groups SKUs by sales stability. We compute the coefficient of variation (CV) over 8 weeks — lower CV means steadier demand.',
+    'xyz.about.x': 'CV ≤ 10%. Sells evenly week to week.',
+    'xyz.about.x.action': 'Just-in-time works — minimal stock.',
+    'xyz.about.y': 'CV 10–25%. Seasonal or fluctuating.',
+    'xyz.about.y.action': 'Keep a small safety stock for peaks.',
+    'xyz.about.z': 'CV > 25%. Erratic or rare demand.',
+    'xyz.about.z.action': 'Big safety stock or made-to-order.',
   },
 } as const;
 

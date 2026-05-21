@@ -84,20 +84,35 @@ export function InventoryView({
       minWidth: 160,
       render: (r) => (
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-(--color-primary-soft) text-(--color-primary-soft-fg) grid place-items-center text-[11px] font-bold shrink-0">
-            {r.name.slice(0, 2).toUpperCase()}
+          <div
+            className={
+              r.mmlFlag
+                ? 'w-8 h-8 rounded-lg bg-gradient-to-br from-(--color-primary) to-(--color-accent-5) text-white grid place-items-center text-[11px] font-bold shrink-0 shadow-[0_2px_8px_rgba(74,101,255,0.35)]'
+                : 'w-8 h-8 rounded-lg bg-(--color-primary-soft) text-(--color-primary-soft-fg) grid place-items-center text-[11px] font-bold shrink-0'
+            }
+          >
+            {r.mmlFlag ? '★' : r.name.slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <div className="font-semibold text-(--color-fg) text-[13px]">{r.name}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-(--color-fg) text-[13px] truncate">{r.name}</span>
+              {r.mmlFlag && (
+                <span
+                  title="Топ по выручке — даёт ~80% дохода. Не допускайте отсутствия на складе."
+                  className="shrink-0 rounded-md bg-(--color-primary-soft) px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-(--color-primary-soft-fg)"
+                >
+                  ★ MML
+                </span>
+              )}
+            </div>
             <div className="text-[11px] text-(--color-muted-fg)">
-              {r.mmlFlag && <span className="text-(--color-primary) font-medium">★ MML · </span>}
               {fmt.pct(r.share)} выручки
             </div>
           </div>
         </div>
       ),
       sortAccessor: (r) => r.name,
-      exportValue: (r) => r.name,
+      exportValue: (r) => (r.mmlFlag ? `★ ${r.name}` : r.name),
     },
     {
       key: 'stock',
@@ -243,6 +258,8 @@ export function InventoryView({
             value: fmt.money(totals.stockValue, currency),
             icon: Boxes, accent: 'indigo' as const,
             spark: genSpark(totals.stockValue, 12, 0.08, 1),
+            tooltip: 'Сумма всех остатков по закупочным ценам',
+            advice: 'Клик — сортировать по стоимости остатка',
             onClick: () => sortBy('stockValue', 'desc'),
           },
           {
@@ -252,6 +269,8 @@ export function InventoryView({
             icon: TrendingUp, accent: 'emerald' as const,
             spark: genSpark(totals.dailyGross, 12, 0.18, 2),
             trend: turnoverTrend,
+            tooltip: 'Маржинальный доход в день: (цена − себестоимость) × средние продажи',
+            advice: 'Стрелочка — сравнение с предыдущим периодом такой же длины',
             onClick: () => sortBy('daily', 'desc'),
           },
           {
@@ -261,6 +280,8 @@ export function InventoryView({
             icon: Rocket,
             accent: 'violet' as const,
             spark: genSpark(totals.mmlShare, 12, 0.05, 3),
+            tooltip: 'MML (Minimum Marketing List) — товары, которые дают ~80% выручки. Их нельзя пускать в OOS.',
+            advice: mmlOnly ? 'Клик — выключить фильтр' : 'Клик — оставить только ★ MML-товары',
             onClick: toggleMmlOnly,
           },
           {
@@ -268,6 +289,8 @@ export function InventoryView({
             value: fmt.money(totals.lostProfit, currency),
             icon: AlertTriangle, accent: 'rose' as const,
             spark: genSpark(totals.lostProfit, 12, 0.25, 4),
+            tooltip: `Сколько прибыли потеряно из-за дефицита (OOS) за ${horizonDays} дней`,
+            advice: 'Закупите товары с самым большим OOS первыми',
             onClick: () => sortBy('oosFrozen', 'asc'),
           },
           {
@@ -275,12 +298,16 @@ export function InventoryView({
             hint: t('kpi.frozenHint', { pct: fmt.pct(totals.frozenShare) }),
             icon: Snowflake, accent: 'amber' as const,
             spark: genSpark(totals.frozenMoney, 12, 0.05, 5),
+            tooltip: 'Капитал в товарах сверх норматива — лежит, продаётся медленно',
+            advice: 'Распродайте излишки и не закупайте этот ассортимент',
             onClick: () => sortBy('oosFrozen', 'desc'),
           },
           {
             label: t('kpi.upliftAtZero'), value: `+${fmt.pct(totals.profitUpliftPct)}`,
             hint: t('kpi.upliftHint', { x: fmt.num(totals.profitUpliftX, 2) }),
             icon: Wallet, accent: 'cyan' as const,
+            tooltip: 'Насколько выросла бы прибыль, если устранить все OOS',
+            advice: 'Цель — приблизить к 0%: чем меньше дефицита, тем больше выручки',
           },
         ].map((k, i) => (
           <div key={k.label} className={cn('oy-anim-card', `oy-stagger-${(i % 6) + 1}`)}>

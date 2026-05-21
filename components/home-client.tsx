@@ -12,12 +12,14 @@ import { useT } from '@/lib/i18n/provider';
 import {
   createDebtorTask,
   loadAnalytics,
+  loadCompanyCurrency,
   loadComparison,
   loadCurrentEmployee,
   loadDebtors,
   type AnalyticsResult,
   type ComparisonResult,
   type ConnectParams,
+  type CurrencyInfo,
   type DebtorsProgress,
   type LoadProgress,
 } from '@/lib/moysklad/browser';
@@ -35,27 +37,30 @@ const PARAMS_KEY = 'oy-ms-params';
 const CACHE_DATA_KEY = 'oy-cache-data';
 const CACHE_DEBTORS_KEY = 'oy-cache-debtors';
 const CACHE_ASSIGNEE_KEY = 'oy-cache-assignee';
+const CACHE_CURRENCY_KEY = 'oy-cache-currency';
 const CACHE_TIME_KEY = 'oy-cache-time';
 
 type Cached = {
   data: AnalyticsResult | null;
   debtors: DebtCandidate[] | null;
   assignee: { href: string; name: string } | null;
+  currency: CurrencyInfo | null;
   time: string | null;
 };
 
 function readCache(): Cached {
   if (typeof window === 'undefined') {
-    return { data: null, debtors: null, assignee: null, time: null };
+    return { data: null, debtors: null, assignee: null, currency: null, time: null };
   }
   try {
     const data = JSON.parse(localStorage.getItem(CACHE_DATA_KEY) || 'null');
     const debtors = JSON.parse(localStorage.getItem(CACHE_DEBTORS_KEY) || 'null');
     const assignee = JSON.parse(localStorage.getItem(CACHE_ASSIGNEE_KEY) || 'null');
+    const currency = JSON.parse(localStorage.getItem(CACHE_CURRENCY_KEY) || 'null');
     const time = localStorage.getItem(CACHE_TIME_KEY);
-    return { data, debtors, assignee, time };
+    return { data, debtors, assignee, currency, time };
   } catch {
-    return { data: null, debtors: null, assignee: null, time: null };
+    return { data: null, debtors: null, assignee: null, currency: null, time: null };
   }
 }
 
@@ -63,11 +68,13 @@ function writeCache(
   data: AnalyticsResult | null,
   debtors: DebtCandidate[] | null,
   assignee: { href: string; name: string } | null,
+  currency: CurrencyInfo | null = null,
 ) {
   try {
     if (data) localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data));
     if (debtors) localStorage.setItem(CACHE_DEBTORS_KEY, JSON.stringify(debtors));
     if (assignee) localStorage.setItem(CACHE_ASSIGNEE_KEY, JSON.stringify(assignee));
+    if (currency) localStorage.setItem(CACHE_CURRENCY_KEY, JSON.stringify(currency));
     localStorage.setItem(CACHE_TIME_KEY, new Date().toISOString());
   } catch {
     /* quota exceeded — silently skip */
@@ -89,6 +96,7 @@ function clearCache() {
     localStorage.removeItem(CACHE_DATA_KEY);
     localStorage.removeItem(CACHE_DEBTORS_KEY);
     localStorage.removeItem(CACHE_ASSIGNEE_KEY);
+    localStorage.removeItem(CACHE_CURRENCY_KEY);
     localStorage.removeItem(CACHE_TIME_KEY);
   } catch {
     /* ignore */
@@ -126,6 +134,7 @@ export function HomeClient() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [cacheTime, setCacheTime] = React.useState<string | null>(null);
   const [comparison, setComparison] = React.useState<ComparisonResult | null>(null);
+  const [currency, setCurrency] = React.useState<CurrencyInfo | null>(null);
 
   const createTask = React.useCallback(
     async (d: DebtCandidate): Promise<{ taskId: string }> => {
@@ -182,6 +191,16 @@ export function HomeClient() {
           })
           .catch(() => setAssignee(null));
         loadComparison(token, params).then(setComparison).catch(() => setComparison(null));
+        loadCompanyCurrency(token)
+          .then((c) => {
+            if (c) {
+              setCurrency(c);
+              writeCache(null, null, null, c);
+            }
+          })
+          .catch(() => {
+            /* ignore */
+          });
         setDebtorsScanning(true);
         setDebtorsError(null);
         loadDebtors(token, (e) => setDebtorsProgress(e))
@@ -227,6 +246,7 @@ export function HomeClient() {
     if (cached.data) setData(cached.data);
     if (cached.debtors) setDebtors(cached.debtors);
     if (cached.assignee) setAssignee(cached.assignee);
+    if (cached.currency) setCurrency(cached.currency);
     if (cached.time) setCacheTime(cached.time);
 
     const token = sessionStorage.getItem(TOKEN_KEY);
@@ -256,6 +276,7 @@ export function HomeClient() {
     setAssignee(null);
     setCacheTime(null);
     setComparison(null);
+    setCurrency(null);
   }
 
   function readStoredParams(): ConnectParams {
@@ -398,7 +419,7 @@ export function HomeClient() {
         rfm={rfm}
         debtors={dashDebtors}
         source={isLive ? 'moysklad' : 'demo'}
-        currency="сум"
+        currency={currency?.symbol ?? 'сум'}
         horizonDays={10}
         onScanDebtors={isLive ? scanDebtors : undefined}
         debtorsScanning={debtorsScanning}

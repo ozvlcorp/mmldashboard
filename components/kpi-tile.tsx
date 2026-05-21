@@ -18,6 +18,8 @@ export function KpiTile({
   label,
   value,
   hint,
+  tooltip,
+  advice,
   icon: Icon,
   trend,
   spark,
@@ -28,6 +30,8 @@ export function KpiTile({
   label: string;
   value: string;
   hint?: string;
+  tooltip?: string;
+  advice?: string;
   icon?: LucideIcon;
   trend?: { value: number; positive?: boolean };
   spark?: number[];
@@ -50,10 +54,11 @@ export function KpiTile({
       style={{
         boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
       }}
+      title={tooltip}
       className={cn(
-        'group relative rounded-2xl bg-(--color-card) p-5 transition-all hover:shadow-lg w-full text-left',
+        'group relative rounded-2xl bg-(--color-card) p-5 transition-all hover:shadow-lg w-full text-left border-2 border-transparent',
         interactive &&
-          'cursor-pointer hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)/30',
+          'cursor-pointer hover:-translate-y-0.5 hover:border-(--color-primary)/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)/30',
         className,
       )}
     >
@@ -101,6 +106,12 @@ export function KpiTile({
               <Sparkline data={spark} color={a.chart} width={90} height={28} />
             </div>
           )}
+        </div>
+      )}
+
+      {advice && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-1 rounded-b-2xl bg-(--color-card) border-t border-(--color-border-soft) px-3 py-2 text-[11px] leading-snug text-(--color-muted-fg) opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+          <span className="font-semibold text-(--color-fg)">💡 Совет:</span> {advice}
         </div>
       )}
     </Wrapper>

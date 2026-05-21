@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Zap, Activity, AlertCircle } from 'lucide-react';
 import { buildXyzReport, type XyzInput, type XyzRow } from '@/lib/analytics/xyz';
 import { fmt, cn } from '@/lib/utils';
@@ -28,6 +28,17 @@ export function XyzView({ inputs }: { inputs: XyzInput[] }) {
     for (const r of rows) c[r.class]++;
     return c;
   }, [rows]);
+
+  const tableRef = useRef<HTMLDivElement>(null);
+  const [classFilter, setClassFilter] = useState<'X' | 'Y' | 'Z' | null>(null);
+  const displayedRows = useMemo(
+    () => (classFilter ? rows.filter((r) => r.class === classFilter) : rows),
+    [rows, classFilter],
+  );
+  const toggleClass = (c: 'X' | 'Y' | 'Z') => {
+    setClassFilter((prev) => (prev === c ? null : c));
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const top = useMemo(
     () => [...rows].sort((a, b) => b.totalSales - a.totalSales).slice(0, 5),
@@ -119,15 +130,81 @@ export function XyzView({ inputs }: { inputs: XyzInput[] }) {
 
   return (
     <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('xyz.about.title')}</CardTitle>
+          <CardDescription>{t('xyz.about.desc')}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/40 p-3">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-emerald-700">
+              <Zap size={14} /> X
+            </div>
+            <div className="mt-1 text-[12px] leading-snug text-(--color-fg-soft)">
+              {t('xyz.about.x')}
+            </div>
+            <div className="mt-1 text-[11px] font-semibold text-emerald-700">
+              {t('xyz.about.x.action')}
+            </div>
+          </div>
+          <div className="rounded-xl border border-amber-200/60 bg-amber-50/40 p-3">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-amber-700">
+              <Activity size={14} /> Y
+            </div>
+            <div className="mt-1 text-[12px] leading-snug text-(--color-fg-soft)">
+              {t('xyz.about.y')}
+            </div>
+            <div className="mt-1 text-[11px] font-semibold text-amber-700">
+              {t('xyz.about.y.action')}
+            </div>
+          </div>
+          <div className="rounded-xl border border-rose-200/60 bg-rose-50/40 p-3">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-rose-700">
+              <AlertCircle size={14} /> Z
+            </div>
+            <div className="mt-1 text-[12px] leading-snug text-(--color-fg-soft)">
+              {t('xyz.about.z')}
+            </div>
+            <div className="mt-1 text-[11px] font-semibold text-rose-700">
+              {t('xyz.about.z.action')}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="oy-anim-card oy-stagger-1">
-          <KpiTile label={t('kpi.classX')} value={`${counts.X}`} hint={t('kpi.classXHint')} icon={Zap} accent="emerald" />
+          <KpiTile
+            label={t('kpi.classX')}
+            value={`${counts.X}`}
+            hint={t('kpi.classXHint')}
+            icon={Zap}
+            accent="emerald"
+            onClick={() => toggleClass('X')}
+            className={classFilter === 'X' ? 'ring-2 ring-(--color-success)/40' : ''}
+          />
         </div>
         <div className="oy-anim-card oy-stagger-2">
-          <KpiTile label={t('kpi.classY')} value={`${counts.Y}`} hint={t('kpi.classYHint')} icon={Activity} accent="amber" />
+          <KpiTile
+            label={t('kpi.classY')}
+            value={`${counts.Y}`}
+            hint={t('kpi.classYHint')}
+            icon={Activity}
+            accent="amber"
+            onClick={() => toggleClass('Y')}
+            className={classFilter === 'Y' ? 'ring-2 ring-(--color-warning)/40' : ''}
+          />
         </div>
         <div className="oy-anim-card oy-stagger-3">
-          <KpiTile label={t('kpi.classZ')} value={`${counts.Z}`} hint={t('kpi.classZHint')} icon={AlertCircle} accent="rose" />
+          <KpiTile
+            label={t('kpi.classZ')}
+            value={`${counts.Z}`}
+            hint={t('kpi.classZHint')}
+            icon={AlertCircle}
+            accent="rose"
+            onClick={() => toggleClass('Z')}
+            className={classFilter === 'Z' ? 'ring-2 ring-(--color-danger)/40' : ''}
+          />
         </div>
       </div>
 
@@ -178,14 +255,31 @@ export function XyzView({ inputs }: { inputs: XyzInput[] }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card ref={tableRef}>
         <CardHeader>
-          <CardTitle>{t('app.allItems')}</CardTitle>
-          <CardDescription>{t('card.allPositions.desc', { count: rows.length })}</CardDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>{t('app.allItems')}</CardTitle>
+              <CardDescription>
+                {classFilter
+                  ? `${displayedRows.length} класса ${classFilter} из ${rows.length}`
+                  : t('card.allPositions.desc', { count: rows.length })}
+              </CardDescription>
+            </div>
+            {classFilter && (
+              <button
+                onClick={() => setClassFilter(null)}
+                className="inline-flex items-center gap-1.5 rounded-md bg-(--color-primary-soft) px-2 py-1 text-[11px] font-semibold text-(--color-primary-soft-fg) hover:bg-(--color-primary-soft)/70"
+              >
+                Класс {classFilter} · сбросить
+              </button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="px-0 py-0">
           <DataTable
-            data={rows}
+            key={`xyz-${classFilter ?? 'all'}`}
+            data={displayedRows}
             columns={columns}
             rowKey={(r) => r.id}
             defaultSort={{ key: 'cv', dir: 'asc' }}

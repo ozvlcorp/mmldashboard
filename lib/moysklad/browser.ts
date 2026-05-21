@@ -268,6 +268,58 @@ export async function loadCurrentEmployee(
   return { href: emp.meta.href, name: emp.name ?? 'Текущий пользователь' };
 }
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  UZS: 'сум',
+  RUB: '₽',
+  USD: '$',
+  EUR: '€',
+  KZT: '₸',
+  KGS: 'сом',
+  TJS: 'смн',
+  BYN: 'Br',
+  UAH: '₴',
+  TRY: '₺',
+  AZN: '₼',
+  GBP: '£',
+};
+
+export type CurrencyInfo = {
+  isoCode: string;
+  name: string;
+  symbol: string;
+};
+
+/**
+ * Базовая валюта аккаунта МойСклад. Тянем через companysettings →
+ * /entity/currency/{id}, выбираем символ или сокращение для UI.
+ */
+export async function loadCompanyCurrency(
+  token: string,
+): Promise<CurrencyInfo | null> {
+  const settings = await fetchEntity<{ currency?: { meta?: { href?: string } } }>(
+    token,
+    '/context/companysettings',
+  );
+  const href = settings?.currency?.meta?.href;
+  if (!href) return null;
+  // href: https://api.moysklad.ru/api/remap/1.2/entity/currency/{uuid}
+  const id = extractUuid(href);
+  if (!id) return null;
+  const currency = await fetchEntity<{
+    isoCode?: string;
+    name?: string;
+    fullName?: string;
+  }>(token, `/entity/currency/${id}`);
+  if (!currency) return null;
+  const iso = (currency.isoCode ?? '').toUpperCase();
+  const symbol = CURRENCY_SYMBOLS[iso] ?? iso ?? currency.name ?? '';
+  return {
+    isoCode: iso,
+    name: currency.fullName ?? currency.name ?? iso,
+    symbol,
+  };
+}
+
 /**
  * Создаёт задачу в МойСклад для одного должника.
  */

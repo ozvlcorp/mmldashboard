@@ -82,8 +82,25 @@ export function ConnectDialog({
               />
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t('connect.periodDays')}>
+            <Field label={t('connect.periodDays')}>
+              <div className="flex flex-wrap gap-1.5">
+                {[7, 14, 30, 60, 90, 180, 365].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => setPeriodDays(d)}
+                    className={
+                      'h-8 rounded-md border px-3 text-[12px] font-semibold transition-all ' +
+                      (periodDays === d
+                        ? 'border-(--color-primary) bg-(--color-primary) text-white shadow-[0_2px_8px_rgba(74,101,255,0.25)]'
+                        : 'border-(--color-border) bg-(--color-card) text-(--color-fg) hover:border-(--color-primary)/40 hover:bg-(--color-muted)') +
+                      ' disabled:opacity-50'
+                    }
+                  >
+                    {d} дн.
+                  </button>
+                ))}
                 <input
                   type="number"
                   min={1}
@@ -91,21 +108,23 @@ export function ConnectDialog({
                   value={periodDays}
                   disabled={loading}
                   onChange={(e) => setPeriodDays(Number(e.target.value))}
-                  className="h-9 w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
+                  className="h-8 w-20 rounded-md border border-(--color-border) bg-(--color-bg) px-2 text-[12px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
+                  title="Свой период"
                 />
-              </Field>
-              <Field label={t('connect.normDays')}>
-                <input
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={normDays}
-                  disabled={loading}
-                  onChange={(e) => setNormDays(Number(e.target.value))}
-                  className="h-9 w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
-                />
-              </Field>
-            </div>
+              </div>
+            </Field>
+
+            <Field label={t('connect.normDays')}>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={normDays}
+                disabled={loading}
+                onChange={(e) => setNormDays(Number(e.target.value))}
+                className="h-9 w-32 rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
+              />
+            </Field>
 
             <Field label={t('connect.normDaysAttribute')} hint={t('connect.normDaysAttributeHint')}>
               <input
