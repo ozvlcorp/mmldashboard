@@ -32,6 +32,8 @@ export function DebtsView({
   scanning = false,
   scanProgress,
   scanError,
+  onCreateTask,
+  assigneeName,
 }: {
   initialDebtors?: DebtCandidate[];
   currency?: string;
@@ -39,21 +41,41 @@ export function DebtsView({
   scanning?: boolean;
   scanProgress?: string | null;
   scanError?: string | null;
+  onCreateTask?: (d: DebtCandidate) => Promise<{ taskId: string }>;
+  assigneeName?: string | null;
 }) {
   const { t } = useT();
   const debtors = initialDebtors;
   const [taskCreated, setTaskCreated] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
 
   const totalDebt = debtors.reduce((s, d) => s + d.debtAmount, 0);
   const avgDebt = debtors.length > 0 ? totalDebt / debtors.length : 0;
 
-  const handleCreateTask = (d: DebtCandidate) => {
+  const handleCreateTask = async (d: DebtCandidate) => {
     setBusy(d.demandId);
-    setTimeout(() => {
+    setTaskErrors((prev) => {
+      const next = { ...prev };
+      delete next[d.demandId];
+      return next;
+    });
+    try {
+      if (onCreateTask) {
+        await onCreateTask(d);
+      } else {
+        // demo-режим: фейк, чтобы кнопка визуально работала на демо-данных
+        await new Promise((r) => setTimeout(r, 400));
+      }
       setTaskCreated((prev) => new Set(prev).add(d.demandId));
+    } catch (e) {
+      setTaskErrors((prev) => ({
+        ...prev,
+        [d.demandId]: e instanceof Error ? e.message : String(e),
+      }));
+    } finally {
       setBusy(null);
-    }, 400);
+    }
   };
 
   const handleTelegram = (d: DebtCandidate) => {
@@ -152,15 +174,26 @@ export function DebtsView({
       header: 'Статус',
       align: 'center',
       width: 150,
-      render: (d) =>
-        taskCreated.has(d.demandId) ? (
-          <Badge variant="success">
-            <CheckCircle2 size={11} className="mr-1" />
-            Задача создана
-          </Badge>
-        ) : (
-          <Badge variant="warning">Ожидает</Badge>
-        ),
+      render: (d) => (
+        <div className="flex flex-col items-center gap-1">
+          {taskCreated.has(d.demandId) ? (
+            <Badge variant="success">
+              <CheckCircle2 size={11} className="mr-1" />
+              Задача создана
+            </Badge>
+          ) : (
+            <Badge variant="warning">Ожидает</Badge>
+          )}
+          {taskErrors[d.demandId] && (
+            <span
+              className="max-w-[140px] truncate text-[10px] text-rose-600"
+              title={taskErrors[d.demandId]}
+            >
+              {taskErrors[d.demandId]}
+            </span>
+          )}
+        </div>
+      ),
       sortAccessor: (d) => (taskCreated.has(d.demandId) ? 1 : 0),
       exportValue: (d) => (taskCreated.has(d.demandId) ? 'Задача создана' : 'Ожидает'),
     },
@@ -226,6 +259,11 @@ export function DebtsView({
             <div>
               <CardTitle>{t('card.debtors')}</CardTitle>
               <CardDescription>{t('card.debtors.desc')}</CardDescription>
+              {assigneeName && (
+                <div className="mt-1 text-[11px] text-(--color-muted-fg)">
+                  Задачи будут назначены: <span className="font-medium text-(--color-fg)">{assigneeName}</span>
+                </div>
+              )}
             </div>
             <Button
               variant="outline"

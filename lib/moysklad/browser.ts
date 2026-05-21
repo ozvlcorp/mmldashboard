@@ -177,6 +177,49 @@ async function fetchEntity<T>(token: string, path: string): Promise<T | null> {
  * Все контрагенты с отрицательным балансом. Не зависит от кастомных
  * атрибутов МойСклад — работает на любом аккаунте сразу.
  */
+/**
+ * Текущий пользователь, которому принадлежит токен. Используется как
+ * assignee по умолчанию для создаваемых задач.
+ */
+export async function loadCurrentEmployee(
+  token: string,
+): Promise<{ href: string; name: string } | null> {
+  const emp = await fetchEntity<{ name?: string; meta?: { href?: string } }>(
+    token,
+    '/context/employee',
+  );
+  if (!emp?.meta?.href) return null;
+  return { href: emp.meta.href, name: emp.name ?? 'Текущий пользователь' };
+}
+
+/**
+ * Создаёт задачу в МойСклад для одного должника.
+ */
+export async function createDebtorTask(
+  token: string,
+  debtor: import('./debts').DebtCandidate,
+  assigneeHref: string,
+  telegramWebhookBase?: string,
+): Promise<{ taskId: string }> {
+  const res = await fetch('/api/moysklad/debts/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      token,
+      debtors: [debtor],
+      assigneeHref,
+      telegramWebhookBase,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+  const result = data.results?.[0];
+  if (!result?.ok) {
+    throw new Error(result?.error ?? 'Task creation failed');
+  }
+  return { taskId: result.taskId };
+}
+
 export async function loadDebtors(
   token: string,
   onProgress?: (e: DebtorsProgress) => void,

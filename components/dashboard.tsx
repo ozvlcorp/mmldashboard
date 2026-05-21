@@ -16,6 +16,8 @@ import type { XyzInput } from '@/lib/analytics/xyz';
 import type { RfmTransaction } from '@/lib/analytics/rfm';
 import type { DebtCandidate } from '@/lib/moysklad/debts';
 
+type CreateTaskFn = (d: DebtCandidate) => Promise<{ taskId: string }>;
+
 const pageMeta: Record<NavKey, { title: DictKey; subtitle: DictKey }> = {
   inventory: { title: 'page.inventory.title', subtitle: 'page.inventory.subtitle' },
   abc: { title: 'page.abc.title', subtitle: 'page.abc.subtitle' },
@@ -37,6 +39,8 @@ export function Dashboard({
   debtorsScanning,
   debtorsProgress,
   debtorsError,
+  onCreateDebtorTask,
+  assigneeName,
 }: {
   inventory: InventoryInput[];
   abc: AbcInput[];
@@ -50,6 +54,8 @@ export function Dashboard({
   debtorsScanning?: boolean;
   debtorsProgress?: string | null;
   debtorsError?: string | null;
+  onCreateDebtorTask?: CreateTaskFn;
+  assigneeName?: string | null;
 }) {
   const [active, setActive] = useState<NavKey>('inventory');
   const { t, lang, nonce } = useT();
@@ -76,6 +82,8 @@ export function Dashboard({
                 scanning={debtorsScanning}
                 scanProgress={debtorsProgress}
                 scanError={debtorsError}
+                onCreateTask={onCreateDebtorTask}
+                assigneeName={assigneeName}
               />
             )}
           </div>

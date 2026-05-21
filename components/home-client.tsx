@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { ConnectDialog } from '@/components/connect-dialog';
 import { useT } from '@/lib/i18n/provider';
 import {
+  createDebtorTask,
   loadAnalytics,
+  loadCurrentEmployee,
   loadDebtors,
   type AnalyticsResult,
   type ConnectParams,
@@ -50,6 +52,19 @@ export function HomeClient() {
   const [debtorsScanning, setDebtorsScanning] = React.useState(false);
   const [debtorsProgress, setDebtorsProgress] = React.useState<DebtorsProgress | null>(null);
   const [debtorsError, setDebtorsError] = React.useState<string | null>(null);
+  const [assignee, setAssignee] = React.useState<{ href: string; name: string } | null>(null);
+
+  const createTask = React.useCallback(
+    async (d: DebtCandidate): Promise<{ taskId: string }> => {
+      const token = sessionStorage.getItem(TOKEN_KEY);
+      if (!token) throw new Error('Нет токена МойСклад');
+      if (!assignee?.href) throw new Error('Не удалось определить ответственного');
+      const webhookBase =
+        typeof window !== 'undefined' ? `${window.location.origin}/api/telegram/send` : undefined;
+      return createDebtorTask(token, d, assignee.href, webhookBase);
+    },
+    [assignee],
+  );
 
   const scanDebtors = React.useCallback(async () => {
     const token = sessionStorage.getItem(TOKEN_KEY);
@@ -83,6 +98,8 @@ export function HomeClient() {
           /* ignore */
         }
         setOpen(false);
+        // background-load ответственного для создания задач, ошибку молча игнорим
+        loadCurrentEmployee(token).then(setAssignee).catch(() => setAssignee(null));
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         if (opts.clearOnError) {
@@ -125,6 +142,7 @@ export function HomeClient() {
     setError(null);
     setDebtors(null);
     setDebtorsError(null);
+    setAssignee(null);
   }
 
   function manualRefresh() {
@@ -221,6 +239,8 @@ export function HomeClient() {
         debtorsScanning={debtorsScanning}
         debtorsProgress={debtorsProgressLabel}
         debtorsError={debtorsError}
+        onCreateDebtorTask={isLive && assignee ? createTask : undefined}
+        assigneeName={assignee?.name ?? null}
       />
 
       <ConnectDialog
