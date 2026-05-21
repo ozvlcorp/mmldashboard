@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, Bell, Calendar, ChevronDown } from 'lucide-react';
+import { Search, Calendar, ChevronDown, X } from 'lucide-react';
 import { useT } from '@/lib/i18n/provider';
 import { LanguageSwitcher } from '@/components/language-switcher';
 
@@ -12,16 +12,26 @@ export function Header({
   source,
   periodDays,
   onChangePeriod,
+  userName,
+  userRole,
+  searchQuery = '',
+  onChangeSearch,
 }: {
   title: string;
   subtitle?: string;
   source: 'demo' | 'moysklad' | 'upload';
   periodDays?: number;
   onChangePeriod?: (d: number) => void;
+  userName?: string;
+  userRole?: string;
+  searchQuery?: string;
+  onChangeSearch?: (v: string) => void;
 }) {
   const { t } = useT();
   const periodLabel = periodDays ? `${periodDays} дн.` : t('app.period.30d');
   const interactive = !!onChangePeriod && !!periodDays;
+  const displayName = userName || 'Jamshid';
+  const displayInitial = displayName.charAt(0).toUpperCase() || 'J';
   return (
     <div className="sticky top-0 z-30 bg-(--color-bg)/85 backdrop-blur-md border-b border-(--color-border)">
       <div className="px-6 lg:px-8 py-4 flex items-center gap-4">
@@ -52,9 +62,21 @@ export function Header({
             />
             <input
               type="text"
+              value={searchQuery}
+              onChange={(e) => onChangeSearch?.(e.target.value)}
               placeholder={t('app.search')}
-              className="w-[240px] pl-9 pr-3 h-9 rounded-lg bg-(--color-card) border border-(--color-border) text-[13px] placeholder:text-(--color-muted-fg) focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 focus:border-(--color-primary)/40"
+              className="w-[240px] pl-9 pr-8 h-9 rounded-lg bg-(--color-card) border border-(--color-border) text-[13px] placeholder:text-(--color-muted-fg) focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 focus:border-(--color-primary)/40"
             />
+            {searchQuery && onChangeSearch && (
+              <button
+                type="button"
+                onClick={() => onChangeSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-(--color-muted-fg) hover:bg-(--color-muted)"
+                aria-label="Clear search"
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
 
           <div className="relative">
@@ -90,18 +112,17 @@ export function Header({
 
           <LanguageSwitcher />
 
-          <button className="relative h-9 w-9 grid place-items-center rounded-lg bg-(--color-card) border border-(--color-border) hover:bg-(--color-muted) hover:border-(--color-primary)/40">
-            <Bell size={16} className="text-(--color-fg-soft)" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-(--color-danger) ring-2 ring-(--color-card)" />
-          </button>
-
           <div className="ml-1 flex items-center gap-2.5 pl-3 border-l border-(--color-border)">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-(--color-primary) to-(--color-accent-5) grid place-items-center text-white text-[13px] font-bold">
-              J
+              {displayInitial}
             </div>
-            <div className="hidden xl:block leading-tight">
-              <div className="text-[13px] font-semibold">Jamshid</div>
-              <div className="text-[11px] text-(--color-muted-fg)">{t('app.admin')}</div>
+            <div className="hidden xl:block leading-tight max-w-[160px]">
+              <div className="text-[13px] font-semibold truncate" title={displayName}>
+                {displayName}
+              </div>
+              <div className="text-[11px] text-(--color-muted-fg) truncate">
+                {userRole ?? t('app.admin')}
+              </div>
             </div>
           </div>
         </div>

@@ -5,6 +5,8 @@ import { Link2, LogOut, RefreshCw } from 'lucide-react';
 import { Dashboard } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
 import { ConnectDialog } from '@/components/connect-dialog';
+import { SettingsDialog } from '@/components/settings-dialog';
+import { HelpDialog } from '@/components/help-dialog';
 import { useT } from '@/lib/i18n/provider';
 import {
   createDebtorTask,
@@ -53,6 +55,9 @@ export function HomeClient() {
   const [debtorsProgress, setDebtorsProgress] = React.useState<DebtorsProgress | null>(null);
   const [debtorsError, setDebtorsError] = React.useState<string | null>(null);
   const [assignee, setAssignee] = React.useState<{ href: string; name: string } | null>(null);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [helpOpen, setHelpOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
 
   const createTask = React.useCallback(
     async (d: DebtCandidate): Promise<{ taskId: string }> => {
@@ -98,8 +103,19 @@ export function HomeClient() {
           /* ignore */
         }
         setOpen(false);
-        // background-load ответственного для создания задач, ошибку молча игнорим
+        // background-load ответственного и должников — параллельно, ошибки молча
         loadCurrentEmployee(token).then(setAssignee).catch(() => setAssignee(null));
+        setDebtorsScanning(true);
+        setDebtorsError(null);
+        loadDebtors(token, (e) => setDebtorsProgress(e))
+          .then((list) => setDebtors(list))
+          .catch((e) =>
+            setDebtorsError(e instanceof Error ? e.message : String(e)),
+          )
+          .finally(() => {
+            setDebtorsScanning(false);
+            setDebtorsProgress(null);
+          });
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         if (opts.clearOnError) {
@@ -170,11 +186,30 @@ export function HomeClient() {
   }
 
   const isLive = !!data;
-  const inventory = data?.inventory ?? DEMO_INVENTORY;
-  const abc = data?.abc ?? DEMO_ABC;
-  const xyz = data?.xyz ?? DEMO_XYZ;
-  const rfm = data?.rfm ?? DEMO_RFM;
-  const dashDebtors = isLive ? debtors ?? [] : DEMO_DEBTORS;
+  const rawInventory = data?.inventory ?? DEMO_INVENTORY;
+  const rawAbc = data?.abc ?? DEMO_ABC;
+  const rawXyz = data?.xyz ?? DEMO_XYZ;
+  const rawRfm = data?.rfm ?? DEMO_RFM;
+  const rawDebtors = isLive ? debtors ?? [] : DEMO_DEBTORS;
+
+  const q = searchQuery.trim().toLowerCase();
+  const matchName = (name: string | undefined) =>
+    !q || (name ?? '').toLowerCase().includes(q);
+
+  const inventory = q ? rawInventory.filter((r) => matchName(r.name)) : rawInventory;
+  const abc = q ? rawAbc.filter((r) => matchName(r.name)) : rawAbc;
+  const xyz = q ? rawXyz.filter((r) => matchName(r.name)) : rawXyz;
+  const rfm = q
+    ? rawRfm.filter((r) => matchName(r.customerName))
+    : rawRfm;
+  const dashDebtors = q
+    ? rawDebtors.filter(
+        (d) =>
+          matchName(d.counterpartyName) ||
+          matchName(d.counterpartyPhone) ||
+          matchName(d.demandName),
+      )
+    : rawDebtors;
   const progressLabel = formatProgress(progress);
   const debtorsProgressLabel = formatDebtorsProgress(debtorsProgress);
 
@@ -254,6 +289,13 @@ export function HomeClient() {
         assigneeName={assignee?.name ?? null}
         periodDays={data?.meta.periodDays}
         onChangePeriod={isLive ? changePeriod : undefined}
+        userName={assignee?.name ?? null}
+        searchQuery={searchQuery}
+        onChangeSearch={setSearchQuery}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenHelp={() => setHelpOpen(true)}
+        onLogout={isLive ? disconnect : undefined}
+        debtorsBadge={isLive ? (debtors?.length ? String(debtors.length) : undefined) : '4'}
       />
 
       <ConnectDialog
@@ -264,6 +306,25 @@ export function HomeClient() {
         progressLabel={progressLabel}
         error={error}
       />
+
+      {settingsOpen && (
+        <SettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          isLive={isLive}
+          userName={assignee?.name ?? null}
+          periodDays={data?.meta.periodDays}
+          normDays={readStoredParams().normDays}
+          normDaysAttribute={readStoredParams().normDaysAttribute ?? null}
+          priceTypeName={readStoredParams().priceTypeName ?? null}
+          productsCount={data?.meta.productsCount}
+          demandsCount={data?.meta.demandsCount}
+          onDisconnect={isLive ? disconnect : undefined}
+          onRefresh={isLive ? manualRefresh : undefined}
+        />
+      )}
+
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
 }

@@ -42,11 +42,28 @@ const navGroups: { label: DictKey; items: NavItem[] }[] = [
 export function Sidebar({
   active,
   onSelect,
+  onOpenSettings,
+  onOpenHelp,
+  onLogout,
+  debtorsBadge,
 }: {
   active: NavKey;
   onSelect: (key: NavKey) => void;
+  onOpenSettings?: () => void;
+  onOpenHelp?: () => void;
+  onLogout?: () => void;
+  debtorsBadge?: string;
 }) {
   const { t } = useT();
+  const groups: typeof navGroups = [
+    navGroups[0],
+    {
+      ...navGroups[1],
+      items: navGroups[1].items.map((it) =>
+        it.key === 'debts' ? { ...it, badge: debtorsBadge ?? it.badge } : it,
+      ),
+    },
+  ];
   return (
     <aside className="hidden lg:flex flex-col w-[260px] shrink-0 h-screen sticky top-0 bg-white border-r border-(--color-border) px-4 py-5">
       <div className="flex items-center gap-2.5 px-2 mb-7 oy-anim-fade">
@@ -76,7 +93,7 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto scrollbar-thin -mx-2 px-2">
-        {navGroups.map((group, gi) => (
+        {groups.map((group, gi) => (
           <div key={group.label} className={cn('mb-5 oy-anim-fade', `oy-stagger-${gi + 1}`)}>
             <div className="px-3 mb-1.5 text-[10.5px] font-semibold tracking-[0.08em] uppercase text-(--color-muted-fg)">
               {t(group.label)}
@@ -127,15 +144,27 @@ export function Sidebar({
       </nav>
 
       <div className="space-y-1 pt-4 border-t border-(--color-border-soft) -mx-2 px-2">
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-(--color-fg-soft) hover:bg-(--color-muted)">
+        <button
+          onClick={onOpenSettings}
+          disabled={!onOpenSettings}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-(--color-fg-soft) hover:bg-(--color-muted) disabled:opacity-50 disabled:hover:bg-transparent"
+        >
           <Settings size={18} strokeWidth={1.75} className="text-(--color-muted-fg)" />
           {t('nav.settings')}
         </button>
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-(--color-fg-soft) hover:bg-(--color-muted)">
+        <button
+          onClick={onOpenHelp}
+          disabled={!onOpenHelp}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-(--color-fg-soft) hover:bg-(--color-muted) disabled:opacity-50 disabled:hover:bg-transparent"
+        >
           <HelpCircle size={18} strokeWidth={1.75} className="text-(--color-muted-fg)" />
           {t('nav.help')}
         </button>
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-(--color-danger) hover:bg-(--color-danger-soft)">
+        <button
+          onClick={onLogout}
+          disabled={!onLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-(--color-danger) hover:bg-(--color-danger-soft) disabled:opacity-50 disabled:hover:bg-transparent"
+        >
           <LogOut size={18} strokeWidth={1.75} />
           {t('nav.logout')}
         </button>

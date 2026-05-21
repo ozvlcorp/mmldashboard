@@ -159,6 +159,33 @@ export const dict = {
     'connect.progress.compute': 'Расчёт показателей…',
     'debts.progress.reports': 'Контрагенты: {count}',
     'debts.progress.cards': 'Карточки: {done} / {total}',
+
+    'settings.title': 'Настройки',
+    'settings.connection': 'Подключение',
+    'settings.user': 'Пользователь',
+    'settings.period': 'Период анализа',
+    'settings.normDays': 'Норматив запаса',
+    'settings.normAttr': 'Доп. поле «Норматив»',
+    'settings.priceType': 'Тип цены',
+    'settings.loaded': 'Загружено товаров · продаж',
+
+    'help.title': 'Как работают разделы',
+    'help.subtitle': 'Краткое описание каждой вкладки',
+    'help.inventory.title': 'Склад',
+    'help.inventory.text':
+      'Считает стоимость остатка, потери из-за дефицита (OOS) и «замороженный» капитал. ★ — топ-товары по выручке (cumulative ~80%).',
+    'help.abc.title': 'ABC анализ',
+    'help.abc.text':
+      'Делит товары на классы по вкладу в выручку: A — ~80%, B — ~15%, C — ~5%. Помогает понять что главное, а что можно сократить.',
+    'help.xyz.title': 'XYZ анализ',
+    'help.xyz.text':
+      'Оценивает стабильность спроса по коэффициенту вариации (CV) за последние 8 недель. X — стабильные (JIT), Y — сезонные, Z — нерегулярные (нужен страховой запас).',
+    'help.rfm.title': 'RFM клиентов',
+    'help.rfm.text':
+      'Сегментирует клиентов по давности (R), частоте (F) и сумме покупок (M). Балл 1–5 по каждому. Чемпионы — топ-сегмент 555.',
+    'help.debts.title': 'Долги',
+    'help.debts.text':
+      'Контрагенты с отрицательным балансом — из /report/counterparty. Кнопка «Задача» создаёт задачу в МойСклад на текущего пользователя с привязкой к карточке клиента.',
   },
 
   uz: {
@@ -320,6 +347,33 @@ export const dict = {
     'connect.progress.compute': 'Hisoblanmoqda…',
     'debts.progress.reports': 'Kontragentlar: {count}',
     'debts.progress.cards': 'Kartochkalar: {done} / {total}',
+
+    'settings.title': 'Sozlamalar',
+    'settings.connection': 'Ulanish',
+    'settings.user': 'Foydalanuvchi',
+    'settings.period': 'Tahlil davri',
+    'settings.normDays': "Zaxira me'yori",
+    'settings.normAttr': "Qo'shimcha maydon",
+    'settings.priceType': 'Narx turi',
+    'settings.loaded': 'Mahsulot · sotuv',
+
+    'help.title': "Bo'limlar qanday ishlaydi",
+    'help.subtitle': "Har bir tab haqida qisqacha",
+    'help.inventory.title': 'Ombor',
+    'help.inventory.text':
+      "Qoldiq qiymati, OOS yo'qotishlari va muzlatilgan kapital. ★ — daromad bo'yicha top mahsulotlar (jami ~80%).",
+    'help.abc.title': 'ABC tahlil',
+    'help.abc.text':
+      "Mahsulotlarni daromaddagi ulushiga ko'ra sinflarga ajratadi: A — ~80%, B — ~15%, C — ~5%.",
+    'help.xyz.title': 'XYZ tahlil',
+    'help.xyz.text':
+      "Talab barqarorligini oxirgi 8 hafta uchun variatsiya koeffitsiyenti (CV) orqali baholaydi. X — barqaror, Y — mavsumiy, Z — tartibsiz.",
+    'help.rfm.title': 'Mijozlar RFM',
+    'help.rfm.text':
+      "Mijozlarni yaqinlik (R), chastota (F) va summa (M) bo'yicha segmentlaydi. Chempionlar — 555 segment.",
+    'help.debts.title': 'Qarzlar',
+    'help.debts.text':
+      "Salbiy balansli kontragentlar /report/counterparty'dan. «Vazifa» tugmasi MoySklad'da joriy foydalanuvchi uchun vazifa yaratadi.",
   },
 
   en: {
@@ -476,6 +530,33 @@ export const dict = {
     'connect.progress.compute': 'Crunching numbers…',
     'debts.progress.reports': 'Counterparties: {count}',
     'debts.progress.cards': 'Cards: {done} / {total}',
+
+    'settings.title': 'Settings',
+    'settings.connection': 'Connection',
+    'settings.user': 'User',
+    'settings.period': 'Analysis period',
+    'settings.normDays': 'Stock norm',
+    'settings.normAttr': 'Custom field',
+    'settings.priceType': 'Price type',
+    'settings.loaded': 'Products · sales',
+
+    'help.title': 'How the sections work',
+    'help.subtitle': 'A short description of each tab',
+    'help.inventory.title': 'Inventory',
+    'help.inventory.text':
+      'Stock value, OOS loss and frozen capital. ★ marks the top revenue items (cumulative ~80%).',
+    'help.abc.title': 'ABC analysis',
+    'help.abc.text':
+      'Classifies SKUs by revenue contribution: A — ~80%, B — ~15%, C — ~5%.',
+    'help.xyz.title': 'XYZ analysis',
+    'help.xyz.text':
+      'Demand stability via coefficient of variation (CV) over the last 8 weeks. X — stable, Y — seasonal, Z — erratic.',
+    'help.rfm.title': 'Customer RFM',
+    'help.rfm.text':
+      'Segments customers by recency (R), frequency (F) and monetary value (M). Champions = 555 segment.',
+    'help.debts.title': 'Debts',
+    'help.debts.text':
+      'Counterparties with negative balance from /report/counterparty. The "Task" button creates a MoySklad task assigned to the current user, linked to the counterparty card.',
   },
 } as const;
 
