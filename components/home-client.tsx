@@ -8,10 +8,13 @@ import { ConnectDialog } from '@/components/connect-dialog';
 import { useT } from '@/lib/i18n/provider';
 import {
   loadAnalytics,
+  loadDebtors,
   type AnalyticsResult,
   type ConnectParams,
+  type DebtorsProgress,
   type LoadProgress,
 } from '@/lib/moysklad/browser';
+import type { DebtCandidate } from '@/lib/moysklad/debts';
 import {
   DEMO_INVENTORY,
   DEMO_ABC,
@@ -32,11 +35,38 @@ export function HomeClient() {
     if (p.stage === 'demands') return t('connect.progress.demands', { count: p.count });
     return t('connect.progress.compute');
   };
+
+  const formatDebtorsProgress = (p: DebtorsProgress | null): string | null => {
+    if (!p) return null;
+    if (p.stage === 'reports') return t('debts.progress.reports', { count: p.count });
+    return t('debts.progress.cards', { done: p.done, total: p.total });
+  };
   const [open, setOpen] = React.useState(false);
   const [data, setData] = React.useState<AnalyticsResult | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [progress, setProgress] = React.useState<LoadProgress | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [debtors, setDebtors] = React.useState<DebtCandidate[] | null>(null);
+  const [debtorsScanning, setDebtorsScanning] = React.useState(false);
+  const [debtorsProgress, setDebtorsProgress] = React.useState<DebtorsProgress | null>(null);
+  const [debtorsError, setDebtorsError] = React.useState<string | null>(null);
+
+  const scanDebtors = React.useCallback(async () => {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    setDebtorsScanning(true);
+    setDebtorsError(null);
+    setDebtorsProgress(null);
+    try {
+      const list = await loadDebtors(token, (e) => setDebtorsProgress(e));
+      setDebtors(list);
+    } catch (e) {
+      setDebtorsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDebtorsScanning(false);
+      setDebtorsProgress(null);
+    }
+  }, []);
 
   const load = React.useCallback(
     async (token: string, params: ConnectParams, opts: { clearOnError?: boolean } = {}) => {
@@ -93,6 +123,8 @@ export function HomeClient() {
     }
     setData(null);
     setError(null);
+    setDebtors(null);
+    setDebtorsError(null);
   }
 
   function manualRefresh() {
@@ -113,7 +145,9 @@ export function HomeClient() {
   const abc = data?.abc ?? DEMO_ABC;
   const xyz = data?.xyz ?? DEMO_XYZ;
   const rfm = data?.rfm ?? DEMO_RFM;
+  const dashDebtors = isLive ? debtors ?? [] : DEMO_DEBTORS;
   const progressLabel = formatProgress(progress);
+  const debtorsProgressLabel = formatDebtorsProgress(debtorsProgress);
 
   return (
     <div>
@@ -179,10 +213,14 @@ export function HomeClient() {
         abc={abc}
         xyz={xyz}
         rfm={rfm}
-        debtors={DEMO_DEBTORS}
+        debtors={dashDebtors}
         source={isLive ? 'moysklad' : 'demo'}
         currency="сум"
         horizonDays={10}
+        onScanDebtors={isLive ? scanDebtors : undefined}
+        debtorsScanning={debtorsScanning}
+        debtorsProgress={debtorsProgressLabel}
+        debtorsError={debtorsError}
       />
 
       <ConnectDialog

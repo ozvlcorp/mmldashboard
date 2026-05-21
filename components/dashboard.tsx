@@ -33,6 +33,10 @@ export function Dashboard({
   source,
   currency = 'сум',
   horizonDays = 10,
+  onScanDebtors,
+  debtorsScanning,
+  debtorsProgress,
+  debtorsError,
 }: {
   inventory: InventoryInput[];
   abc: AbcInput[];
@@ -42,6 +46,10 @@ export function Dashboard({
   source: 'demo' | 'moysklad' | 'upload';
   currency?: string;
   horizonDays?: number;
+  onScanDebtors?: () => void;
+  debtorsScanning?: boolean;
+  debtorsProgress?: string | null;
+  debtorsError?: string | null;
 }) {
   const [active, setActive] = useState<NavKey>('inventory');
   const { t, lang, nonce } = useT();
@@ -61,7 +69,14 @@ export function Dashboard({
             {active === 'xyz' && <XyzView inputs={xyz} />}
             {active === 'rfm' && <RfmView transactions={rfm} currency={currency} />}
             {active === 'debts' && (
-              <DebtsView initialDebtors={debtors} currency={currency} />
+              <DebtsView
+                initialDebtors={debtors}
+                currency={currency}
+                onScan={onScanDebtors}
+                scanning={debtorsScanning}
+                scanProgress={debtorsProgress}
+                scanError={debtorsError}
+              />
             )}
           </div>
         </main>

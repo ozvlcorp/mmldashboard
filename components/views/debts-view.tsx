@@ -10,7 +10,7 @@ import {
   MessageCircle,
   Plus,
 } from 'lucide-react';
-import { fmt, cn } from '@/lib/utils';
+import { fmt } from '@/lib/utils';
 import {
   Card,
   CardContent,
@@ -28,12 +28,20 @@ import type { DebtCandidate } from '@/lib/moysklad/debts';
 export function DebtsView({
   initialDebtors = [],
   currency = 'сум',
+  onScan,
+  scanning = false,
+  scanProgress,
+  scanError,
 }: {
   initialDebtors?: DebtCandidate[];
   currency?: string;
+  onScan?: () => void;
+  scanning?: boolean;
+  scanProgress?: string | null;
+  scanError?: string | null;
 }) {
   const { t } = useT();
-  const [debtors, setDebtors] = useState<DebtCandidate[]>(initialDebtors);
+  const debtors = initialDebtors;
   const [taskCreated, setTaskCreated] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -54,14 +62,6 @@ export function DebtsView({
     if (d.counterpartyPhone) url.searchParams.set('phone', d.counterpartyPhone);
     url.searchParams.set('text', text);
     window.open(url.toString(), '_blank');
-  };
-
-  const handleRescan = () => {
-    setBusy('scan');
-    setTimeout(() => {
-      setDebtors(initialDebtors);
-      setBusy(null);
-    }, 600);
   };
 
   const columns: Column<DebtCandidate>[] = [
@@ -227,21 +227,45 @@ export function DebtsView({
               <CardTitle>{t('card.debtors')}</CardTitle>
               <CardDescription>{t('card.debtors.desc')}</CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={handleRescan} disabled={busy === 'scan'}>
-              <RefreshCw size={13} className={busy === 'scan' ? 'animate-spin' : ''} />
-              {busy === 'scan' ? t('card.scanning') : t('card.scanDebt')}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onScan}
+              disabled={scanning || !onScan}
+            >
+              <RefreshCw size={13} className={scanning ? 'animate-spin' : ''} />
+              {scanning ? t('card.scanning') : t('card.scanDebt')}
             </Button>
           </div>
+          {scanProgress && (
+            <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-(--color-primary)/30 bg-(--color-primary-soft) px-2.5 py-1 text-[11px] font-medium text-(--color-primary-soft-fg)">
+              <RefreshCw size={11} className="animate-spin" />
+              {scanProgress}
+            </div>
+          )}
+          {scanError && (
+            <div className="mt-2 rounded-md border border-rose-300/50 bg-rose-50/70 px-2.5 py-1 text-[11px] text-rose-700">
+              {scanError}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="px-0 py-0">
-          <DataTable
-            data={debtors}
-            columns={columns}
-            rowKey={(d) => d.demandId}
-            defaultSort={{ key: 'debt', dir: 'desc' }}
-            tableId="debts"
-            exportName="OY_Analytics_Debts"
-          />
+          {debtors.length === 0 && !scanning ? (
+            <div className="px-6 py-10 text-center text-[13px] text-(--color-muted-fg)">
+              {onScan
+                ? 'Нажмите «Запустить сканирование» — найдём контрагентов с отрицательным балансом.'
+                : 'Должников не найдено.'}
+            </div>
+          ) : (
+            <DataTable
+              data={debtors}
+              columns={columns}
+              rowKey={(d) => d.demandId}
+              defaultSort={{ key: 'debt', dir: 'desc' }}
+              tableId="debts"
+              exportName="OY_Analytics_Debts"
+            />
+          )}
         </CardContent>
       </Card>
 

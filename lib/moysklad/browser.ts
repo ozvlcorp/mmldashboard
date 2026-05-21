@@ -14,7 +14,14 @@ import type { InventoryInput } from '../analytics/inventory';
 import type { AbcInput } from '../analytics/abc';
 import type { XyzInput } from '../analytics/xyz';
 import type { RfmTransaction } from '../analytics/rfm';
-import type { MsAssortmentItem, MsDemand, MsListResponse } from './types';
+import type {
+  MsAssortmentItem,
+  MsCounterparty,
+  MsCounterpartyReport,
+  MsDemand,
+  MsListResponse,
+} from './types';
+import type { DebtCandidate } from './debts';
 
 export type ConnectParams = {
   periodDays: number;
@@ -138,4 +145,81 @@ export async function loadAnalytics(
       demandsCount: demands.length,
     },
   };
+}
+
+export type DebtorsProgress =
+  | { stage: 'reports'; count: number }
+  | { stage: 'cards'; done: number; total: number };
+
+const UUID_RE = /([0-9a-f-]{36})(?:$|[/?])/i;
+
+function extractUuid(href: string | undefined): string | null {
+  if (!href) return null;
+  return UUID_RE.exec(href)?.[1] ?? null;
+}
+
+async function fetchEntity<T>(token: string, path: string): Promise<T | null> {
+  try {
+    const res = await fetch('/api/moysklad/page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, path }),
+    });
+    const data = await res.json();
+    if (!res.ok) return null;
+    return data as T;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Все контрагенты с отрицательным балансом. Не зависит от кастомных
+ * атрибутов МойСклад — работает на любом аккаунте сразу.
+ */
+export async function loadDebtors(
+  token: string,
+  onProgress?: (e: DebtorsProgress) => void,
+): Promise<DebtCandidate[]> {
+  const reports = await fetchAll<MsCounterpartyReport>(
+    token,
+    '/report/counterparty?limit=500',
+    (n) => onProgress?.({ stage: 'reports', count: n }),
+  );
+  const debtors = reports.filter((r) => r.balance < 0);
+  if (debtors.length === 0) return [];
+
+  const out: DebtCandidate[] = [];
+  let done = 0;
+  const total = debtors.length;
+  const queue = [...debtors];
+  const workerCount = Math.min(5, queue.length);
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (queue.length) {
+      const r = queue.shift();
+      if (!r) break;
+      const cpId = extractUuid(r.counterparty?.meta?.href);
+      if (!cpId) {
+        done += 1;
+        onProgress?.({ stage: 'cards', done, total });
+        continue;
+      }
+      const cp = await fetchEntity<MsCounterparty>(token, `/entity/counterparty/${cpId}`);
+      out.push({
+        demandId: cpId,
+        demandName: r.demandsCount ? `${r.demandsCount} отгрузок` : '—',
+        demandMoment: r.lastDemandDate ?? new Date().toISOString(),
+        demandSum: (r.demandsSum ?? 0) / 100,
+        counterpartyId: cpId,
+        counterpartyName: cp?.name ?? `Контрагент ${cpId.slice(0, 8)}`,
+        counterpartyPhone: cp?.phone,
+        balance: r.balance / 100,
+        debtAmount: Math.abs(r.balance) / 100,
+      });
+      done += 1;
+      onProgress?.({ stage: 'cards', done, total });
+    }
+  });
+  await Promise.all(workers);
+  return out.sort((a, b) => b.debtAmount - a.debtAmount);
 }

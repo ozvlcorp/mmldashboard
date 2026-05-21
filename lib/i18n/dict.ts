@@ -157,6 +157,8 @@ export const dict = {
     'connect.progress.assortment': 'Ассортимент: {count}',
     'connect.progress.demands': 'Продажи: {count}',
     'connect.progress.compute': 'Расчёт показателей…',
+    'debts.progress.reports': 'Контрагенты: {count}',
+    'debts.progress.cards': 'Карточки: {done} / {total}',
   },
 
   uz: {
@@ -316,6 +318,8 @@ export const dict = {
     'connect.progress.assortment': 'Assortiment: {count}',
     'connect.progress.demands': 'Sotuvlar: {count}',
     'connect.progress.compute': 'Hisoblanmoqda…',
+    'debts.progress.reports': 'Kontragentlar: {count}',
+    'debts.progress.cards': 'Kartochkalar: {done} / {total}',
   },
 
   en: {
@@ -470,6 +474,8 @@ export const dict = {
     'connect.progress.assortment': 'Assortment: {count}',
     'connect.progress.demands': 'Sales: {count}',
     'connect.progress.compute': 'Crunching numbers…',
+    'debts.progress.reports': 'Counterparties: {count}',
+    'debts.progress.cards': 'Cards: {done} / {total}',
   },
 } as const;
 
