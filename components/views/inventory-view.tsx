@@ -310,7 +310,7 @@ export function InventoryView({
             advice: 'Цель — приблизить к 0%: чем меньше дефицита, тем больше выручки',
           },
         ].map((k, i) => (
-          <div key={k.label} className={cn('oy-anim-card', `oy-stagger-${(i % 6) + 1}`)}>
+          <div key={k.label} className={cn('oy-anim-card h-full', `oy-stagger-${(i % 6) + 1}`)}>
             <KpiTile {...k} />
           </div>
         ))}

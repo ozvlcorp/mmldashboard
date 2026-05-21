@@ -152,10 +152,10 @@ export function RfmView({
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="oy-anim-card oy-stagger-1">
+        <div className="oy-anim-card oy-stagger-1 h-full">
           <KpiTile label={t('kpi.totalCustomers')} value={fmt.int(scored.length)} icon={Users} accent="indigo" />
         </div>
-        <div className="oy-anim-card oy-stagger-2">
+        <div className="oy-anim-card oy-stagger-2 h-full">
           <KpiTile
             label={t('kpi.champions')}
             value={fmt.int(champions?.count ?? 0)}
@@ -166,7 +166,7 @@ export function RfmView({
             className={segmentFilter === 'Champions' ? 'ring-2 ring-(--color-success)/40' : ''}
           />
         </div>
-        <div className="oy-anim-card oy-stagger-3">
+        <div className="oy-anim-card oy-stagger-3 h-full">
           <KpiTile
             label={t('kpi.atRisk')}
             value={fmt.int(atRisk?.count ?? 0)}
@@ -177,7 +177,7 @@ export function RfmView({
             className={segmentFilter === 'At Risk' ? 'ring-2 ring-(--color-danger)/40' : ''}
           />
         </div>
-        <div className="oy-anim-card oy-stagger-4">
+        <div className="oy-anim-card oy-stagger-4 h-full">
           <KpiTile label={t('kpi.totalRevenue')} value={fmt.money(totalRevenue, currency)} icon={Coins} accent="violet" />
         </div>
       </div>

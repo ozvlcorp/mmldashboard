@@ -138,7 +138,7 @@ export function AbcView({
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="oy-anim-card oy-stagger-1">
+        <div className="oy-anim-card oy-stagger-1 h-full">
           <KpiTile
             label={t('kpi.classA')}
             value={`${groups.A.count}`}
@@ -151,7 +151,7 @@ export function AbcView({
             }
           />
         </div>
-        <div className="oy-anim-card oy-stagger-2">
+        <div className="oy-anim-card oy-stagger-2 h-full">
           <KpiTile
             label={t('kpi.classB')}
             value={`${groups.B.count}`}
@@ -164,7 +164,7 @@ export function AbcView({
             }
           />
         </div>
-        <div className="oy-anim-card oy-stagger-3">
+        <div className="oy-anim-card oy-stagger-3 h-full">
           <KpiTile
             label={t('kpi.classC')}
             value={`${groups.C.count}`}

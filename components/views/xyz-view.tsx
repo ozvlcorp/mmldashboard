@@ -173,7 +173,7 @@ export function XyzView({ inputs }: { inputs: XyzInput[] }) {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="oy-anim-card oy-stagger-1">
+        <div className="oy-anim-card oy-stagger-1 h-full">
           <KpiTile
             label={t('kpi.classX')}
             value={`${counts.X}`}
@@ -184,7 +184,7 @@ export function XyzView({ inputs }: { inputs: XyzInput[] }) {
             className={classFilter === 'X' ? 'ring-2 ring-(--color-success)/40' : ''}
           />
         </div>
-        <div className="oy-anim-card oy-stagger-2">
+        <div className="oy-anim-card oy-stagger-2 h-full">
           <KpiTile
             label={t('kpi.classY')}
             value={`${counts.Y}`}
@@ -195,7 +195,7 @@ export function XyzView({ inputs }: { inputs: XyzInput[] }) {
             className={classFilter === 'Y' ? 'ring-2 ring-(--color-warning)/40' : ''}
           />
         </div>
-        <div className="oy-anim-card oy-stagger-3">
+        <div className="oy-anim-card oy-stagger-3 h-full">
           <KpiTile
             label={t('kpi.classZ')}
             value={`${counts.Z}`}

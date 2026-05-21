@@ -263,16 +263,16 @@ export function DebtsView({
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="oy-anim-card oy-stagger-1">
+        <div className="oy-anim-card oy-stagger-1 h-full">
           <KpiTile label={t('kpi.debtorsCount')} value={fmt.int(debtors.length)} icon={Users} accent="rose" />
         </div>
-        <div className="oy-anim-card oy-stagger-2">
+        <div className="oy-anim-card oy-stagger-2 h-full">
           <KpiTile label={t('kpi.totalDebt')} value={fmt.money(totalDebt, currency)} icon={Coins} accent="rose" trend={{ value: 8.2, positive: false }} />
         </div>
-        <div className="oy-anim-card oy-stagger-3">
+        <div className="oy-anim-card oy-stagger-3 h-full">
           <KpiTile label={t('kpi.avgDebt')} value={fmt.money(avgDebt, currency)} icon={AlertCircle} accent="amber" />
         </div>
-        <div className="oy-anim-card oy-stagger-4">
+        <div className="oy-anim-card oy-stagger-4 h-full">
           <KpiTile
             label={t('kpi.tasksCreated')}
             value={`${taskCreated.size} / ${debtors.length}`}

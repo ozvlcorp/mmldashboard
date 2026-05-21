@@ -14,6 +14,18 @@ const accentClasses: Record<KpiAccent, { bg: string; fg: string; chart: string }
   cyan: { bg: 'bg-[#cffafe]', fg: 'text-[#0891b2]', chart: '#06b6d4' },
 };
 
+// Подбираем размер шрифта по длине значения чтобы оно влезало в одну
+// строку — иначе на узких плитках (xl: 6 колонок ≈ 200px) длинные числа
+// типа "$ 438 223 521" переносятся и плитки получаются разной высоты.
+function valueFontClass(value: string): string {
+  const len = value.length;
+  if (len <= 7) return 'text-[28px]';
+  if (len <= 10) return 'text-[24px]';
+  if (len <= 13) return 'text-[20px]';
+  if (len <= 16) return 'text-[18px]';
+  return 'text-[16px]';
+}
+
 export function KpiTile({
   label,
   value,
@@ -46,6 +58,7 @@ export function KpiTile({
 
   const interactive = !!onClick;
   const Wrapper = interactive ? 'button' : 'div';
+  const titleText = [tooltip, advice && `💡 ${advice}`].filter(Boolean).join('\n');
 
   return (
     <Wrapper
@@ -54,66 +67,67 @@ export function KpiTile({
       style={{
         boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
       }}
-      title={tooltip}
+      title={titleText || undefined}
       className={cn(
-        'group relative rounded-2xl bg-(--color-card) p-5 transition-all hover:shadow-lg w-full text-left border-2 border-transparent',
+        // h-full + flex-col → одна высота в grid-cell; min-h гарантирует ровную сетку
+        'group relative h-full flex flex-col rounded-2xl bg-(--color-card) p-4 transition-all hover:shadow-lg w-full text-left border-2 border-transparent min-h-[160px]',
         interactive &&
-          'cursor-pointer hover:-translate-y-0.5 hover:border-(--color-primary)/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)/30',
+          'cursor-pointer hover:border-(--color-primary)/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)/30',
         className,
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[11.5px] font-semibold text-(--color-muted-fg) uppercase tracking-[0.08em]">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-semibold text-(--color-muted-fg) uppercase tracking-[0.08em] truncate">
             {label}
           </div>
-          <div className="mt-2.5 text-[30px] font-bold tracking-[-0.025em] text-(--color-fg) num leading-[1.05]">
+          <div
+            className={cn(
+              'mt-2 font-bold tracking-[-0.02em] text-(--color-fg) tabular-nums leading-[1.1] whitespace-nowrap overflow-hidden',
+              valueFontClass(value),
+            )}
+          >
             {value}
           </div>
           {hint && (
-            <div className="mt-2 text-[12.5px] text-(--color-muted-fg) truncate">{hint}</div>
+            <div className="mt-1.5 text-[11.5px] text-(--color-muted-fg) line-clamp-2 leading-snug">
+              {hint}
+            </div>
           )}
         </div>
         {Icon && (
-          <div className={cn('w-10 h-10 rounded-xl grid place-items-center shrink-0', a.bg)}>
-            <Icon size={18} className={a.fg} strokeWidth={2.25} />
+          <div className={cn('w-9 h-9 rounded-xl grid place-items-center shrink-0', a.bg)}>
+            <Icon size={17} className={a.fg} strokeWidth={2.25} />
           </div>
         )}
       </div>
 
-      {(trend || spark) && (
-        <div className="mt-4 flex items-end justify-between gap-3">
-          {trend && TrendIcon ? (
-            <div
-              className={cn(
-                'inline-flex items-center gap-1 text-[12px] font-semibold px-1.5 py-0.5 rounded-md',
-                trend.value === 0
-                  ? 'bg-(--color-muted) text-(--color-muted-fg)'
-                  : trendPositive
-                  ? 'bg-(--color-success-soft) text-(--color-success)'
-                  : 'bg-(--color-danger-soft) text-(--color-danger)',
-              )}
-            >
-              <TrendIcon size={12} strokeWidth={2.5} />
-              {trend.value > 0 ? '+' : ''}
-              {trend.value.toFixed(1)}%
-            </div>
-          ) : (
-            <div />
-          )}
-          {spark && spark.length > 1 && (
-            <div className="opacity-90">
-              <Sparkline data={spark} color={a.chart} width={90} height={28} />
-            </div>
-          )}
-        </div>
-      )}
-
-      {advice && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-1 rounded-b-2xl bg-(--color-card) border-t border-(--color-border-soft) px-3 py-2 text-[11px] leading-snug text-(--color-muted-fg) opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
-          <span className="font-semibold text-(--color-fg)">💡 Совет:</span> {advice}
-        </div>
-      )}
+      {/* spark/trend всегда внизу (mt-auto) и одинаковой высоты — синхронный ритм во всём ряду */}
+      <div className="mt-auto pt-3 flex items-end justify-between gap-2 min-h-[34px]">
+        {trend && TrendIcon ? (
+          <div
+            className={cn(
+              'inline-flex items-center gap-1 text-[11.5px] font-semibold px-1.5 py-0.5 rounded-md',
+              trend.value === 0
+                ? 'bg-(--color-muted) text-(--color-muted-fg)'
+                : trendPositive
+                ? 'bg-(--color-success-soft) text-(--color-success)'
+                : 'bg-(--color-danger-soft) text-(--color-danger)',
+            )}
+          >
+            <TrendIcon size={11} strokeWidth={2.5} />
+            {trend.value > 0 ? '+' : ''}
+            {trend.value.toFixed(1)}%
+          </div>
+        ) : (
+          <span />
+        )}
+        {spark && spark.length > 1 ? (
+          <Sparkline data={spark} color={a.chart} width={80} height={24} />
+        ) : (
+          <span />
+        )}
+      </div>
     </Wrapper>
   );
 }
