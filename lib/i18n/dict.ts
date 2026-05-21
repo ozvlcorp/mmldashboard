@@ -135,6 +135,25 @@ export const dict = {
     'biz.potential': 'Возможная прибыль',
     'biz.actual': 'Фактическая прибыль',
     'biz.lost': 'Потери OOS',
+
+    'connect.openButton': 'Подключить МойСклад',
+    'connect.disconnect': 'Отключить',
+    'connect.title': 'Подключение к МойСклад',
+    'connect.subtitle': 'Введите Bearer-токен — загрузим данные из вашего аккаунта',
+    'connect.token': 'Bearer-токен',
+    'connect.tokenHint':
+      'Получить: Профиль пользователя → Сервис → Получить токен доступа',
+    'connect.periodDays': 'Период, дней',
+    'connect.normDays': 'Норматив запаса, дней',
+    'connect.normDaysAttribute': 'Доп. поле «Норматив запаса»',
+    'connect.normDaysAttributeHint':
+      'Имя дополнительного поля товара. Если не задано — используется норматив по умолчанию.',
+    'connect.priceType': 'Тип цены для себестоимости',
+    'connect.priceTypeHint': 'Опционально. По умолчанию — закупочная.',
+    'connect.cancel': 'Отмена',
+    'connect.submit': 'Загрузить данные',
+    'connect.loading': 'Загрузка…',
+    'connect.meta': '{products} товаров · {demands} продаж · {days} дней',
   },
 
   uz: {
@@ -271,6 +290,26 @@ export const dict = {
     'biz.potential': 'Imkonyatli foyda',
     'biz.actual': 'Haqiqiy foyda',
     'biz.lost': "OOS yo'qotishlari",
+
+    'connect.openButton': 'MoySklad ulash',
+    'connect.disconnect': 'Uzish',
+    'connect.title': 'MoySklad ulash',
+    'connect.subtitle':
+      "Bearer-tokenni kiriting — sizning hisobingizdan ma'lumotlar yuklab olinadi",
+    'connect.token': 'Bearer-token',
+    'connect.tokenHint':
+      "Olish: Foydalanuvchi profili → Servis → Kirish tokenini olish",
+    'connect.periodDays': 'Davr, kun',
+    'connect.normDays': "Zaxira me'yori, kun",
+    'connect.normDaysAttribute': "Qo'shimcha maydon «Zaxira me'yori»",
+    'connect.normDaysAttributeHint':
+      "Mahsulotning qo'shimcha maydoni nomi. Bo'sh bo'lsa — standart me'yor ishlatiladi.",
+    'connect.priceType': "Tannarx uchun narx turi",
+    'connect.priceTypeHint': "Ixtiyoriy. Standart bo'yicha — xarid narxi.",
+    'connect.cancel': 'Bekor qilish',
+    'connect.submit': "Ma'lumotlarni yuklash",
+    'connect.loading': 'Yuklanmoqda…',
+    'connect.meta': '{products} mahsulot · {demands} sotuv · {days} kun',
   },
 
   en: {
@@ -404,6 +443,24 @@ export const dict = {
     'biz.potential': 'Possible profit',
     'biz.actual': 'Actual profit',
     'biz.lost': 'OOS losses',
+
+    'connect.openButton': 'Connect MoySklad',
+    'connect.disconnect': 'Disconnect',
+    'connect.title': 'Connect to MoySklad',
+    'connect.subtitle': 'Paste a Bearer token — we will pull data from your account',
+    'connect.token': 'Bearer token',
+    'connect.tokenHint': 'Get it: User profile → Service → Get access token',
+    'connect.periodDays': 'Period, days',
+    'connect.normDays': 'Stock norm, days',
+    'connect.normDaysAttribute': 'Custom field «Stock norm»',
+    'connect.normDaysAttributeHint':
+      'Name of product custom attribute. If empty — default norm is used.',
+    'connect.priceType': 'Price type for cost',
+    'connect.priceTypeHint': 'Optional. Defaults to purchase price.',
+    'connect.cancel': 'Cancel',
+    'connect.submit': 'Load data',
+    'connect.loading': 'Loading…',
+    'connect.meta': '{products} products · {demands} sales · {days} days',
   },
 } as const;
 
