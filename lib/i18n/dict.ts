@@ -154,6 +154,9 @@ export const dict = {
     'connect.submit': 'Загрузить данные',
     'connect.loading': 'Загрузка…',
     'connect.meta': '{products} товаров · {demands} продаж · {days} дней',
+    'connect.progress.assortment': 'Ассортимент: {count}',
+    'connect.progress.demands': 'Продажи: {count}',
+    'connect.progress.compute': 'Расчёт показателей…',
   },
 
   uz: {
@@ -310,6 +313,9 @@ export const dict = {
     'connect.submit': "Ma'lumotlarni yuklash",
     'connect.loading': 'Yuklanmoqda…',
     'connect.meta': '{products} mahsulot · {demands} sotuv · {days} kun',
+    'connect.progress.assortment': 'Assortiment: {count}',
+    'connect.progress.demands': 'Sotuvlar: {count}',
+    'connect.progress.compute': 'Hisoblanmoqda…',
   },
 
   en: {
@@ -461,6 +467,9 @@ export const dict = {
     'connect.submit': 'Load data',
     'connect.loading': 'Loading…',
     'connect.meta': '{products} products · {demands} sales · {days} days',
+    'connect.progress.assortment': 'Assortment: {count}',
+    'connect.progress.demands': 'Sales: {count}',
+    'connect.progress.compute': 'Crunching numbers…',
   },
 } as const;
 

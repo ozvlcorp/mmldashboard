@@ -5,40 +5,24 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X, Loader2, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useT } from '@/lib/i18n/provider';
-import type { InventoryInput } from '@/lib/analytics/inventory';
-import type { AbcInput } from '@/lib/analytics/abc';
-import type { XyzInput } from '@/lib/analytics/xyz';
-import type { RfmTransaction } from '@/lib/analytics/rfm';
+import type { ConnectParams } from '@/lib/moysklad/browser';
 
-export type LoadedData = {
-  inventory: InventoryInput[];
-  abc: AbcInput[];
-  xyz: XyzInput[];
-  rfm: RfmTransaction[];
-  meta: {
-    periodDays: number;
-    from: string;
-    to: string;
-    productsCount: number;
-    demandsCount: number;
-  };
-};
-
-export type ConnectParams = {
-  periodDays: number;
-  normDays: number;
-  normDaysAttribute?: string;
-  priceTypeName?: string;
-};
+export type { ConnectParams } from '@/lib/moysklad/browser';
 
 export function ConnectDialog({
   open,
   onOpenChange,
-  onLoaded,
+  onSubmit,
+  loading,
+  progressLabel,
+  error,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onLoaded: (token: string, params: ConnectParams, data: LoadedData) => void;
+  onSubmit: (token: string, params: ConnectParams) => void;
+  loading: boolean;
+  progressLabel: string | null;
+  error: string | null;
 }) {
   const { t } = useT();
   const [token, setToken] = React.useState('');
@@ -46,47 +30,23 @@ export function ConnectDialog({
   const [normDays, setNormDays] = React.useState(10);
   const [normDaysAttribute, setNormDaysAttribute] = React.useState('');
   const [priceTypeName, setPriceTypeName] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!open) {
-      setToken('');
-      setError(null);
-    }
+    if (!open) setToken('');
   }, [open]);
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
-    const params: ConnectParams = {
+    onSubmit(token.trim(), {
       periodDays,
       normDays,
       normDaysAttribute: normDaysAttribute.trim() || undefined,
       priceTypeName: priceTypeName.trim() || undefined,
-    };
-    try {
-      const res = await fetch('/api/moysklad/analytics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token.trim(), ...params }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.detail || data.error || `HTTP ${res.status}`);
-      }
-      onLoaded(token.trim(), params, data as LoadedData);
-      onOpenChange(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={(v) => !loading && onOpenChange(v)}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm oy-anim-fade" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92%] max-w-[540px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-(--color-border) bg-(--color-card) p-6 shadow-2xl oy-anim-fade">
@@ -100,7 +60,11 @@ export function ConnectDialog({
                 {t('connect.subtitle')}
               </Dialog.Description>
             </div>
-            <Dialog.Close className="rounded-md p-1 hover:bg-(--color-muted)" aria-label="Close">
+            <Dialog.Close
+              className="rounded-md p-1 hover:bg-(--color-muted) disabled:opacity-50"
+              aria-label="Close"
+              disabled={loading}
+            >
               <X size={16} className="text-(--color-muted-fg)" />
             </Dialog.Close>
           </div>
@@ -111,9 +75,10 @@ export function ConnectDialog({
                 required
                 rows={3}
                 value={token}
+                disabled={loading}
                 onChange={(e) => setToken(e.target.value)}
                 placeholder="eyJhbGciOi…"
-                className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 py-2 font-mono text-[12px] leading-snug focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20"
+                className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 py-2 font-mono text-[12px] leading-snug focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
               />
             </Field>
 
@@ -124,8 +89,9 @@ export function ConnectDialog({
                   min={1}
                   max={365}
                   value={periodDays}
+                  disabled={loading}
                   onChange={(e) => setPeriodDays(Number(e.target.value))}
-                  className="h-9 w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20"
+                  className="h-9 w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
                 />
               </Field>
               <Field label={t('connect.normDays')}>
@@ -134,8 +100,9 @@ export function ConnectDialog({
                   min={1}
                   max={365}
                   value={normDays}
+                  disabled={loading}
                   onChange={(e) => setNormDays(Number(e.target.value))}
-                  className="h-9 w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20"
+                  className="h-9 w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
                 />
               </Field>
             </div>
@@ -144,9 +111,10 @@ export function ConnectDialog({
               <input
                 type="text"
                 value={normDaysAttribute}
+                disabled={loading}
                 onChange={(e) => setNormDaysAttribute(e.target.value)}
                 placeholder="Норматив запаса (дни)"
-                className="h-9 w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20"
+                className="h-9 w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
               />
             </Field>
 
@@ -154,11 +122,19 @@ export function ConnectDialog({
               <input
                 type="text"
                 value={priceTypeName}
+                disabled={loading}
                 onChange={(e) => setPriceTypeName(e.target.value)}
                 placeholder="Закупочная цена"
-                className="h-9 w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20"
+                className="h-9 w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
               />
             </Field>
+
+            {progressLabel && (
+              <div className="flex items-center gap-2 rounded-md border border-(--color-primary)/30 bg-(--color-primary-soft) px-3 py-2 text-[12px] text-(--color-primary-soft-fg)">
+                <Loader2 size={13} className="animate-spin" />
+                {progressLabel}
+              </div>
+            )}
 
             {error && (
               <div className="rounded-md border border-rose-300/50 bg-rose-50/70 px-3 py-2 text-[12px] text-rose-700">
@@ -167,7 +143,12 @@ export function ConnectDialog({
             )}
 
             <div className="flex items-center justify-end gap-2 pt-1">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => onOpenChange(false)}
+                disabled={loading}
+              >
                 {t('connect.cancel')}
               </Button>
               <Button type="submit" disabled={loading || token.trim().length < 10}>
