@@ -1,17 +1,18 @@
+import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-export function Card({ className, style, ...p }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      {...p}
-      style={{ boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)', ...style }}
-      className={cn(
-        'rounded-2xl bg-(--color-card) overflow-hidden',
-        className,
-      )}
-    />
-  );
-}
+export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  function Card({ className, style, ...p }, ref) {
+    return (
+      <div
+        ref={ref}
+        {...p}
+        style={{ boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)', ...style }}
+        className={cn('rounded-2xl bg-(--color-card) overflow-hidden', className)}
+      />
+    );
+  },
+);
 
 export function CardHeader({ className, ...p }: React.HTMLAttributes<HTMLDivElement>) {
   return (

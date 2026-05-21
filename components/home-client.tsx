@@ -29,6 +29,68 @@ import {
 
 const TOKEN_KEY = 'oy-ms-token';
 const PARAMS_KEY = 'oy-ms-params';
+const CACHE_DATA_KEY = 'oy-cache-data';
+const CACHE_DEBTORS_KEY = 'oy-cache-debtors';
+const CACHE_ASSIGNEE_KEY = 'oy-cache-assignee';
+const CACHE_TIME_KEY = 'oy-cache-time';
+
+type Cached = {
+  data: AnalyticsResult | null;
+  debtors: DebtCandidate[] | null;
+  assignee: { href: string; name: string } | null;
+  time: string | null;
+};
+
+function readCache(): Cached {
+  if (typeof window === 'undefined') {
+    return { data: null, debtors: null, assignee: null, time: null };
+  }
+  try {
+    const data = JSON.parse(localStorage.getItem(CACHE_DATA_KEY) || 'null');
+    const debtors = JSON.parse(localStorage.getItem(CACHE_DEBTORS_KEY) || 'null');
+    const assignee = JSON.parse(localStorage.getItem(CACHE_ASSIGNEE_KEY) || 'null');
+    const time = localStorage.getItem(CACHE_TIME_KEY);
+    return { data, debtors, assignee, time };
+  } catch {
+    return { data: null, debtors: null, assignee: null, time: null };
+  }
+}
+
+function writeCache(
+  data: AnalyticsResult | null,
+  debtors: DebtCandidate[] | null,
+  assignee: { href: string; name: string } | null,
+) {
+  try {
+    if (data) localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data));
+    if (debtors) localStorage.setItem(CACHE_DEBTORS_KEY, JSON.stringify(debtors));
+    if (assignee) localStorage.setItem(CACHE_ASSIGNEE_KEY, JSON.stringify(assignee));
+    localStorage.setItem(CACHE_TIME_KEY, new Date().toISOString());
+  } catch {
+    /* quota exceeded — silently skip */
+  }
+}
+
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return iso;
+  const diffSec = Math.floor((Date.now() - then) / 1000);
+  if (diffSec < 60) return 'только что';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} мин назад`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} ч назад`;
+  return `${Math.floor(diffSec / 86400)} дн назад`;
+}
+
+function clearCache() {
+  try {
+    localStorage.removeItem(CACHE_DATA_KEY);
+    localStorage.removeItem(CACHE_DEBTORS_KEY);
+    localStorage.removeItem(CACHE_ASSIGNEE_KEY);
+    localStorage.removeItem(CACHE_TIME_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 export function HomeClient() {
   const { t } = useT();
@@ -58,6 +120,7 @@ export function HomeClient() {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [cacheTime, setCacheTime] = React.useState<string | null>(null);
 
   const createTask = React.useCallback(
     async (d: DebtCandidate): Promise<{ taskId: string }> => {
@@ -96,6 +159,8 @@ export function HomeClient() {
       try {
         const result = await loadAnalytics(token, params, (e) => setProgress(e));
         setData(result);
+        const now = new Date().toISOString();
+        setCacheTime(now);
         try {
           sessionStorage.setItem(TOKEN_KEY, token);
           sessionStorage.setItem(PARAMS_KEY, JSON.stringify(params));
@@ -103,12 +168,20 @@ export function HomeClient() {
           /* ignore */
         }
         setOpen(false);
-        // background-load ответственного и должников — параллельно, ошибки молча
-        loadCurrentEmployee(token).then(setAssignee).catch(() => setAssignee(null));
+        // background-load ответственного и должников — параллельно
+        loadCurrentEmployee(token)
+          .then((emp) => {
+            setAssignee(emp);
+            writeCache(result, null, emp);
+          })
+          .catch(() => setAssignee(null));
         setDebtorsScanning(true);
         setDebtorsError(null);
         loadDebtors(token, (e) => setDebtorsProgress(e))
-          .then((list) => setDebtors(list))
+          .then((list) => {
+            setDebtors(list);
+            writeCache(result, list, null);
+          })
           .catch((e) =>
             setDebtorsError(e instanceof Error ? e.message : String(e)),
           )
@@ -116,6 +189,7 @@ export function HomeClient() {
             setDebtorsScanning(false);
             setDebtorsProgress(null);
           });
+        writeCache(result, null, null);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         if (opts.clearOnError) {
@@ -125,6 +199,11 @@ export function HomeClient() {
           } catch {
             /* ignore */
           }
+          clearCache();
+          setData(null);
+          setDebtors(null);
+          setAssignee(null);
+          setCacheTime(null);
         }
       } finally {
         setLoading(false);
@@ -135,6 +214,14 @@ export function HomeClient() {
   );
 
   React.useEffect(() => {
+    // Восстанавливаем закэшированные данные мгновенно — пользователь видит
+    // последние известные цифры пока в фоне летит свежий запрос
+    const cached = readCache();
+    if (cached.data) setData(cached.data);
+    if (cached.debtors) setDebtors(cached.debtors);
+    if (cached.assignee) setAssignee(cached.assignee);
+    if (cached.time) setCacheTime(cached.time);
+
     const token = sessionStorage.getItem(TOKEN_KEY);
     const paramsRaw = sessionStorage.getItem(PARAMS_KEY);
     if (!token) return;
@@ -154,11 +241,13 @@ export function HomeClient() {
     } catch {
       /* ignore */
     }
+    clearCache();
     setData(null);
     setError(null);
     setDebtors(null);
     setDebtorsError(null);
     setAssignee(null);
+    setCacheTime(null);
   }
 
   function readStoredParams(): ConnectParams {
@@ -234,6 +323,17 @@ export function HomeClient() {
                     demands: data.meta.demandsCount,
                     days: data.meta.periodDays,
                   })}
+                </span>
+              )}
+              {loading && progressLabel && (
+                <span className="ml-2 inline-flex items-center gap-1 text-(--color-primary)">
+                  <RefreshCw size={11} className="animate-spin" />
+                  {progressLabel}
+                </span>
+              )}
+              {!loading && cacheTime && (
+                <span className="ml-2 text-(--color-muted-fg)">
+                  · {t('app.updatedAt', { time: formatRelativeTime(cacheTime) })}
                 </span>
               )}
             </>

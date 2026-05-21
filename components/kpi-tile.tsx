@@ -23,6 +23,7 @@ export function KpiTile({
   spark,
   accent = 'indigo',
   className,
+  onClick,
 }: {
   label: string;
   value: string;
@@ -32,19 +33,27 @@ export function KpiTile({
   spark?: number[];
   accent?: KpiAccent;
   className?: string;
+  onClick?: () => void;
 }) {
   const a = accentClasses[accent];
   const trendPositive = trend ? trend.positive ?? trend.value > 0 : undefined;
   const TrendIcon =
     trend == null ? null : trend.value === 0 ? Minus : trendPositive ? TrendingUp : TrendingDown;
 
+  const interactive = !!onClick;
+  const Wrapper = interactive ? 'button' : 'div';
+
   return (
-    <div
+    <Wrapper
+      type={interactive ? 'button' : undefined}
+      onClick={onClick}
       style={{
         boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
       }}
       className={cn(
-        'group relative rounded-2xl bg-(--color-card) p-5 transition-all hover:shadow-lg',
+        'group relative rounded-2xl bg-(--color-card) p-5 transition-all hover:shadow-lg w-full text-left',
+        interactive &&
+          'cursor-pointer hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)/30',
         className,
       )}
     >
@@ -94,6 +103,6 @@ export function KpiTile({
           )}
         </div>
       )}
-    </div>
+    </Wrapper>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Boxes,
   Wallet,
@@ -50,6 +50,28 @@ export function InventoryView({
     horizonDays,
   ]);
   const { rows, totals } = report;
+
+  const tableRef = useRef<HTMLDivElement>(null);
+  const [tableSort, setTableSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({
+    key: 'stockValue',
+    dir: 'desc',
+  });
+  const [mmlOnly, setMmlOnly] = useState(false);
+
+  const displayedRows = useMemo(
+    () => (mmlOnly ? rows.filter((r) => r.mmlFlag) : rows),
+    [rows, mmlOnly],
+  );
+
+  const sortBy = (key: string, dir: 'asc' | 'desc') => {
+    setTableSort({ key, dir });
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const toggleMmlOnly = () => {
+    setMmlOnly((prev) => !prev);
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const columns: Column<InventoryRow>[] = [
     {
@@ -218,43 +240,44 @@ export function InventoryView({
             label: t('kpi.stockValue'),
             value: fmt.money(totals.stockValue, currency),
             icon: Boxes, accent: 'indigo' as const,
-            trend: { value: 8.4, positive: true },
             spark: genSpark(totals.stockValue, 12, 0.08, 1),
+            onClick: () => sortBy('stockValue', 'desc'),
           },
           {
             label: t('kpi.dailyIncome'),
             value: fmt.money(totals.dailyGross, currency),
             hint: t('kpi.dailyIncomeHint', { days: horizonDays, value: fmt.money(totals.potentialProfit, currency) }),
             icon: TrendingUp, accent: 'emerald' as const,
-            trend: { value: 12.1, positive: true },
             spark: genSpark(totals.dailyGross, 12, 0.18, 2),
+            onClick: () => sortBy('daily', 'desc'),
           },
           {
-            label: t('kpi.mmlShare'), value: fmt.pct(totals.mmlShare),
-            hint: t('kpi.mmlHint'),
-            icon: Rocket, accent: 'violet' as const,
-            trend: { value: 3.2, positive: true },
+            label: t('kpi.mmlShare'),
+            value: fmt.pct(totals.mmlShare),
+            hint: mmlOnly ? t('kpi.mmlHintOn') : t('kpi.mmlHint'),
+            icon: Rocket,
+            accent: 'violet' as const,
             spark: genSpark(totals.mmlShare, 12, 0.05, 3),
+            onClick: toggleMmlOnly,
           },
           {
             label: t('kpi.oosLoss', { days: horizonDays }),
             value: fmt.money(totals.lostProfit, currency),
             icon: AlertTriangle, accent: 'rose' as const,
-            trend: { value: -15.8, positive: false },
             spark: genSpark(totals.lostProfit, 12, 0.25, 4),
+            onClick: () => sortBy('oosFrozen', 'asc'),
           },
           {
             label: t('kpi.frozen'), value: fmt.money(totals.frozenMoney, currency),
             hint: t('kpi.frozenHint', { pct: fmt.pct(totals.frozenShare) }),
             icon: Snowflake, accent: 'amber' as const,
-            trend: { value: -2.1, positive: false },
             spark: genSpark(totals.frozenMoney, 12, 0.05, 5),
+            onClick: () => sortBy('oosFrozen', 'desc'),
           },
           {
             label: t('kpi.upliftAtZero'), value: `+${fmt.pct(totals.profitUpliftPct)}`,
             hint: t('kpi.upliftHint', { x: fmt.num(totals.profitUpliftX, 2) }),
             icon: Wallet, accent: 'cyan' as const,
-            trend: { value: 0, positive: true },
           },
         ].map((k, i) => (
           <div key={k.label} className={cn('oy-anim-card', `oy-stagger-${(i % 6) + 1}`)}>
@@ -263,24 +286,35 @@ export function InventoryView({
         ))}
       </div>
 
-      <Card>
+      <Card ref={tableRef}>
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
               <CardTitle>Аналитика по товарам</CardTitle>
               <CardDescription>
-                {inputs.length} позиций · кликните по заголовку столбца для сортировки
+                {displayedRows.length} {mmlOnly ? `★ MML из ${inputs.length}` : 'позиций'} · кликните по заголовку столбца для сортировки
               </CardDescription>
             </div>
-            <Badge variant="primary">{horizonDays} дн</Badge>
+            <div className="flex items-center gap-2">
+              {mmlOnly && (
+                <button
+                  onClick={toggleMmlOnly}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-(--color-primary-soft) px-2 py-1 text-[11px] font-semibold text-(--color-primary-soft-fg) hover:bg-(--color-primary-soft)/70"
+                >
+                  ★ MML · сбросить
+                </button>
+              )}
+              <Badge variant="primary">{horizonDays} дн</Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="px-0 py-0">
           <DataTable
-            data={rows}
+            key={`inv-${tableSort.key}-${tableSort.dir}`}
+            data={displayedRows}
             columns={columns}
             rowKey={(r) => r.id}
-            defaultSort={{ key: 'stockValue', dir: 'desc' }}
+            defaultSort={tableSort}
             tableId="inventory"
             exportName="OY_Analytics_Sklad"
             toolbar="Перетащите границу столбца чтобы изменить ширину"
