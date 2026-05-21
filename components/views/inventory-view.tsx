@@ -39,10 +39,12 @@ export function InventoryView({
   inputs,
   horizonDays = 10,
   currency = 'сум',
+  turnoverTrend,
 }: {
   inputs: InventoryInput[];
   horizonDays?: number;
   currency?: string;
+  turnoverTrend?: { value: number; positive?: boolean };
 }) {
   const { t } = useT();
   const report = useMemo(() => buildInventoryReport(inputs, { horizonDays }), [
@@ -249,6 +251,7 @@ export function InventoryView({
             hint: t('kpi.dailyIncomeHint', { days: horizonDays, value: fmt.money(totals.potentialProfit, currency) }),
             icon: TrendingUp, accent: 'emerald' as const,
             spark: genSpark(totals.dailyGross, 12, 0.18, 2),
+            trend: turnoverTrend,
             onClick: () => sortBy('daily', 'desc'),
           },
           {

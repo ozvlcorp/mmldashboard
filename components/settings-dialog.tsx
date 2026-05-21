@@ -2,9 +2,10 @@
 
 import * as React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, LogOut, RefreshCw, User2, Calendar, Database } from 'lucide-react';
+import { X, LogOut, RefreshCw, User2, Calendar, Database, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useT } from '@/lib/i18n/provider';
+import { loadTelegramConfig } from '@/lib/telegram-config';
 
 export function SettingsDialog({
   open,
@@ -19,6 +20,7 @@ export function SettingsDialog({
   demandsCount,
   onDisconnect,
   onRefresh,
+  onOpenTelegram,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -32,8 +34,10 @@ export function SettingsDialog({
   demandsCount?: number;
   onDisconnect?: () => void;
   onRefresh?: () => void;
+  onOpenTelegram?: () => void;
 }) {
   const { t } = useT();
+  const tgConnected = !!loadTelegramConfig();
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -107,6 +111,33 @@ export function SettingsDialog({
               </Row>
             )}
           </div>
+
+          {onOpenTelegram && (
+            <div className="mt-4 border-t border-(--color-border-soft) pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenTelegram();
+                  onOpenChange(false);
+                }}
+                className="flex w-full items-center justify-between gap-3 rounded-lg border border-(--color-border) bg-(--color-card) px-3 py-2.5 text-left hover:border-(--color-primary)/40 hover:bg-(--color-muted)"
+              >
+                <span className="flex items-center gap-2">
+                  <Send size={14} className="text-(--color-primary)" />
+                  <span className="text-[13px] font-medium">{t('tg.title')}</span>
+                </span>
+                <span
+                  className={
+                    tgConnected
+                      ? 'inline-flex items-center gap-1 rounded-md bg-(--color-success-soft) px-2 py-0.5 text-[11px] font-semibold text-(--color-success)'
+                      : 'text-[11px] font-medium text-(--color-muted-fg)'
+                  }
+                >
+                  {tgConnected ? t('tg.statusOn') : t('tg.statusOff')}
+                </span>
+              </button>
+            </div>
+          )}
 
           {isLive && (
             <div className="mt-5 flex items-center justify-end gap-2 border-t border-(--color-border-soft) pt-4">

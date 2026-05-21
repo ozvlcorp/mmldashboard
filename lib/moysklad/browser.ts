@@ -41,7 +41,15 @@ export type AnalyticsResult = {
     to: string;
     productsCount: number;
     demandsCount: number;
+    turnover: number; // суммарная выручка за период в сумах (demand.sum / 100)
   };
+};
+
+export type ComparisonResult = {
+  previousFrom: string;
+  previousTo: string;
+  previousDemandsCount: number;
+  previousTurnover: number;
 };
 
 export type LoadProgress =
@@ -166,6 +174,8 @@ export async function loadAnalytics(
   });
   const rfm = demandsToRfm(demands);
 
+  const turnover = demands.reduce((s, d) => s + (d.sum ?? 0), 0) / 100;
+
   return {
     inventory,
     abc,
@@ -177,7 +187,43 @@ export async function loadAnalytics(
       to: until.toISOString(),
       productsCount: assortment.length,
       demandsCount: demands.length,
+      turnover,
     },
+  };
+}
+
+/**
+ * Лёгкий запрос предыдущего периода — только агрегаты (без expand),
+ * чтобы посчитать period-over-period дельту для KPI.
+ */
+export async function loadComparison(
+  token: string,
+  params: ConnectParams,
+  onProgress?: (n: number) => void,
+): Promise<ComparisonResult> {
+  const now = new Date();
+  const currentFrom = new Date(now.getTime() - params.periodDays * 86400000);
+  const previousTo = new Date(currentFrom.getTime() - 1000); // на секунду раньше старта current
+  const previousFrom = new Date(previousTo.getTime() - params.periodDays * 86400000);
+
+  const qp = new URLSearchParams({
+    filter: `moment>=${msMoment(previousFrom)};moment<=${msMoment(previousTo)}`,
+    order: 'moment,asc',
+  });
+  // Без expand — записи маленькие, можно тащить большими страницами
+  const demands = await fetchAllParallel<MsDemand>(
+    token,
+    `/entity/demand?${qp.toString()}`,
+    500,
+    onProgress ?? (() => {}),
+  );
+
+  const previousTurnover = demands.reduce((s, d) => s + (d.sum ?? 0), 0) / 100;
+  return {
+    previousFrom: previousFrom.toISOString(),
+    previousTo: previousTo.toISOString(),
+    previousDemandsCount: demands.length,
+    previousTurnover,
   };
 }
 

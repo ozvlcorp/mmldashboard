@@ -7,13 +7,16 @@ import { Button } from '@/components/ui/button';
 import { ConnectDialog } from '@/components/connect-dialog';
 import { SettingsDialog } from '@/components/settings-dialog';
 import { HelpDialog } from '@/components/help-dialog';
+import { TelegramDialog } from '@/components/telegram-dialog';
 import { useT } from '@/lib/i18n/provider';
 import {
   createDebtorTask,
   loadAnalytics,
+  loadComparison,
   loadCurrentEmployee,
   loadDebtors,
   type AnalyticsResult,
+  type ComparisonResult,
   type ConnectParams,
   type DebtorsProgress,
   type LoadProgress,
@@ -119,8 +122,10 @@ export function HomeClient() {
   const [assignee, setAssignee] = React.useState<{ href: string; name: string } | null>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
+  const [telegramOpen, setTelegramOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [cacheTime, setCacheTime] = React.useState<string | null>(null);
+  const [comparison, setComparison] = React.useState<ComparisonResult | null>(null);
 
   const createTask = React.useCallback(
     async (d: DebtCandidate): Promise<{ taskId: string }> => {
@@ -168,13 +173,15 @@ export function HomeClient() {
           /* ignore */
         }
         setOpen(false);
-        // background-load ответственного и должников — параллельно
+        setComparison(null);
+        // фоновые задачи параллельно: ответственный, должники, сравнение с прошлым периодом
         loadCurrentEmployee(token)
           .then((emp) => {
             setAssignee(emp);
             writeCache(result, null, emp);
           })
           .catch(() => setAssignee(null));
+        loadComparison(token, params).then(setComparison).catch(() => setComparison(null));
         setDebtorsScanning(true);
         setDebtorsError(null);
         loadDebtors(token, (e) => setDebtorsProgress(e))
@@ -248,6 +255,7 @@ export function HomeClient() {
     setDebtorsError(null);
     setAssignee(null);
     setCacheTime(null);
+    setComparison(null);
   }
 
   function readStoredParams(): ConnectParams {
@@ -301,6 +309,17 @@ export function HomeClient() {
     : rawDebtors;
   const progressLabel = formatProgress(progress);
   const debtorsProgressLabel = formatDebtorsProgress(debtorsProgress);
+
+  // Period-over-period дельта выручки: сравниваем суммы за два одинаковых
+  // последовательных периода. Только когда есть данные за оба.
+  let turnoverTrend: { value: number; positive?: boolean } | undefined;
+  if (data && comparison && comparison.previousTurnover > 0) {
+    const diff =
+      ((data.meta.turnover - comparison.previousTurnover) /
+        comparison.previousTurnover) *
+      100;
+    turnoverTrend = { value: Number(diff.toFixed(1)), positive: diff >= 0 };
+  }
 
   return (
     <div>
@@ -396,6 +415,7 @@ export function HomeClient() {
         onOpenHelp={() => setHelpOpen(true)}
         onLogout={isLive ? disconnect : undefined}
         debtorsBadge={isLive ? (debtors?.length ? String(debtors.length) : undefined) : '4'}
+        turnoverTrend={turnoverTrend}
       />
 
       <ConnectDialog
@@ -421,10 +441,12 @@ export function HomeClient() {
           demandsCount={data?.meta.demandsCount}
           onDisconnect={isLive ? disconnect : undefined}
           onRefresh={isLive ? manualRefresh : undefined}
+          onOpenTelegram={() => setTelegramOpen(true)}
         />
       )}
 
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <TelegramDialog open={telegramOpen} onOpenChange={setTelegramOpen} />
     </div>
   );
 }

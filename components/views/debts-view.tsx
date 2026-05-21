@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { KpiTile } from '@/components/kpi-tile';
 import { useT } from '@/lib/i18n/provider';
 import type { DebtCandidate } from '@/lib/moysklad/debts';
+import { loadTelegramConfig, sendTelegram } from '@/lib/telegram-config';
 
 export function DebtsView({
   initialDebtors = [],
@@ -78,12 +79,36 @@ export function DebtsView({
     }
   };
 
-  const handleTelegram = (d: DebtCandidate) => {
-    const text = `Здравствуйте! Напоминаем о задолженности ${fmt.money(d.debtAmount)} сум по отгрузке ${d.demandName}.`;
-    const url = new URL('/api/telegram/send', window.location.origin);
-    if (d.counterpartyPhone) url.searchParams.set('phone', d.counterpartyPhone);
-    url.searchParams.set('text', text);
-    window.open(url.toString(), '_blank');
+  const handleTelegram = async (d: DebtCandidate) => {
+    const cfg = loadTelegramConfig();
+    if (!cfg) {
+      setTaskErrors((prev) => ({
+        ...prev,
+        [d.demandId]: 'Telegram не подключён — Настройки → Telegram',
+      }));
+      return;
+    }
+    setBusy('tg-' + d.demandId);
+    setTaskErrors((prev) => {
+      const next = { ...prev };
+      delete next[d.demandId];
+      return next;
+    });
+    const text =
+      `<b>Должник</b>\n` +
+      `${d.counterpartyName}\n` +
+      (d.counterpartyPhone ? `📞 ${d.counterpartyPhone}\n` : '') +
+      `\n<b>Долг:</b> ${fmt.money(d.debtAmount)} сум` +
+      `\n<b>Отгрузок:</b> ${d.demandName}` +
+      `\n<b>Последняя активность:</b> ${new Date(d.demandMoment).toLocaleDateString('ru-RU')}`;
+    const r = await sendTelegram(text, cfg);
+    if (!r.ok) {
+      setTaskErrors((prev) => ({
+        ...prev,
+        [d.demandId]: r.error ?? 'Telegram failed',
+      }));
+    }
+    setBusy(null);
   };
 
   const columns: Column<DebtCandidate>[] = [
@@ -221,9 +246,13 @@ export function DebtsView({
             size="sm"
             variant="secondary"
             onClick={() => handleTelegram(d)}
-            disabled={!d.counterpartyPhone}
+            disabled={busy === 'tg-' + d.demandId}
           >
-            <MessageCircle size={13} />
+            {busy === 'tg-' + d.demandId ? (
+              <RefreshCw size={13} className="animate-spin" />
+            ) : (
+              <MessageCircle size={13} />
+            )}
             Telegram
           </Button>
         </div>

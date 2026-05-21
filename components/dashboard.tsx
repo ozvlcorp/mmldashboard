@@ -50,6 +50,7 @@ export function Dashboard({
   onOpenHelp,
   onLogout,
   debtorsBadge,
+  turnoverTrend,
 }: {
   inventory: InventoryInput[];
   abc: AbcInput[];
@@ -74,6 +75,7 @@ export function Dashboard({
   onOpenHelp?: () => void;
   onLogout?: () => void;
   debtorsBadge?: string;
+  turnoverTrend?: { value: number; positive?: boolean };
 }) {
   const [active, setActive] = useState<NavKey>('inventory');
   const { t, lang, nonce } = useT();
@@ -103,7 +105,12 @@ export function Dashboard({
         <main className="flex-1 px-4 lg:px-8 py-6 lg:py-8">
           <div key={active} className="oy-anim-page">
             {active === 'inventory' && (
-              <InventoryView inputs={inventory} horizonDays={horizonDays} currency={currency} />
+              <InventoryView
+                inputs={inventory}
+                horizonDays={horizonDays}
+                currency={currency}
+                turnoverTrend={turnoverTrend}
+              />
             )}
             {active === 'abc' && <AbcView inputs={abc} currency={currency} />}
             {active === 'xyz' && <XyzView inputs={xyz} />}
