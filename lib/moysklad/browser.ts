@@ -72,18 +72,51 @@ async function fetchPage<T>(token: string, path: string): Promise<MsListResponse
   return data as MsListResponse<T>;
 }
 
-async function fetchAll<T>(
+/**
+ * Параллельная выборка списка через offset/limit. После первой страницы
+ * знаем `meta.size` → расчитываем все остальные offset'ы и стреляем
+ * их одновременно. Cap на 5 одновременных запросов чтобы не упереться
+ * в rate limit МойСклад (типично 5 rps).
+ */
+async function fetchAllParallel<T>(
   token: string,
-  initialPath: string,
+  basePath: string, // без limit/offset
+  limit: number,
   onCount: (n: number) => void,
 ): Promise<T[]> {
-  const out: T[] = [];
-  let url: string | null = initialPath;
-  while (url) {
-    const page: MsListResponse<T> = await fetchPage<T>(token, url);
-    out.push(...page.rows);
-    onCount(out.length);
-    url = page.meta?.nextHref ?? null;
+  const sep = basePath.includes('?') ? '&' : '?';
+  const makeUrl = (offset: number) => `${basePath}${sep}limit=${limit}&offset=${offset}`;
+
+  const first = await fetchPage<T>(token, makeUrl(0));
+  const out: T[] = [...first.rows];
+  onCount(out.length);
+
+  const total = first.meta?.size ?? first.rows.length;
+  if (out.length >= total) return out;
+
+  const offsets: number[] = [];
+  for (let off = first.rows.length; off < total; off += limit) {
+    offsets.push(off);
+  }
+
+  const pages: (T[] | undefined)[] = new Array(offsets.length);
+  let nextIdx = 0;
+  let loaded = out.length;
+  const concurrency = Math.min(5, offsets.length);
+  const workers = Array.from({ length: concurrency }, async () => {
+    while (true) {
+      const idx = nextIdx++;
+      if (idx >= offsets.length) break;
+      const page = await fetchPage<T>(token, makeUrl(offsets[idx]));
+      pages[idx] = page.rows;
+      loaded += page.rows.length;
+      onCount(loaded);
+    }
+  });
+  await Promise.all(workers);
+
+  for (const rows of pages) {
+    if (rows) out.push(...rows);
   }
   return out;
 }
@@ -97,9 +130,10 @@ export async function loadAnalytics(
   const from = new Date(until.getTime() - params.periodDays * 86400000);
 
   // Ассортимент — маленькие записи, можно тащить большими страницами
-  const assortment = await fetchAll<MsAssortmentItem>(
+  const assortment = await fetchAllParallel<MsAssortmentItem>(
     token,
-    '/entity/assortment?stockStore.byStore=true&limit=500',
+    '/entity/assortment?stockStore.byStore=true',
+    500,
     (n) => onProgress?.({ stage: 'assortment', count: n }),
   );
 
@@ -108,11 +142,11 @@ export async function loadAnalytics(
     filter: `moment>=${msMoment(from)};moment<=${msMoment(until)}`,
     expand: 'positions.assortment,agent',
     order: 'moment,asc',
-    limit: '100',
   });
-  const demands = await fetchAll<MsDemand>(
+  const demands = await fetchAllParallel<MsDemand>(
     token,
     `/entity/demand?${qp.toString()}`,
+    100,
     (n) => onProgress?.({ stage: 'demands', count: n }),
   );
 
@@ -174,10 +208,6 @@ async function fetchEntity<T>(token: string, path: string): Promise<T | null> {
 }
 
 /**
- * Все контрагенты с отрицательным балансом. Не зависит от кастомных
- * атрибутов МойСклад — работает на любом аккаунте сразу.
- */
-/**
  * Текущий пользователь, которому принадлежит токен. Используется как
  * assignee по умолчанию для создаваемых задач.
  */
@@ -220,49 +250,82 @@ export async function createDebtorTask(
   return { taskId: result.taskId };
 }
 
+async function fetchCounterpartiesBatch(
+  token: string,
+  ids: string[],
+  onProgress: (done: number, total: number) => void,
+): Promise<Map<string, MsCounterparty>> {
+  const map = new Map<string, MsCounterparty>();
+  if (ids.length === 0) return map;
+  const BATCH = 50;
+  let done = 0;
+
+  // Несколько батчей параллельно
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += BATCH) {
+    batches.push(ids.slice(i, i + BATCH));
+  }
+
+  let nextIdx = 0;
+  const concurrency = Math.min(5, batches.length);
+  const workers = Array.from({ length: concurrency }, async () => {
+    while (true) {
+      const idx = nextIdx++;
+      if (idx >= batches.length) break;
+      const chunk = batches[idx];
+      const filter = chunk.map((id) => `id=${id}`).join(';'); // OR в МойСклад
+      const path = `/entity/counterparty?filter=${encodeURIComponent(filter)}&limit=${chunk.length}`;
+      const page = await fetchPage<MsCounterparty>(token, path);
+      for (const cp of page.rows) {
+        map.set(cp.id, cp);
+      }
+      done += chunk.length;
+      onProgress(done, ids.length);
+    }
+  });
+  await Promise.all(workers);
+  return map;
+}
+
+/**
+ * Все контрагенты с отрицательным балансом. Не зависит от кастомных
+ * атрибутов МойСклад — работает на любом аккаунте сразу.
+ */
 export async function loadDebtors(
   token: string,
   onProgress?: (e: DebtorsProgress) => void,
 ): Promise<DebtCandidate[]> {
-  const reports = await fetchAll<MsCounterpartyReport>(
+  const reports = await fetchAllParallel<MsCounterpartyReport>(
     token,
-    '/report/counterparty?limit=500',
+    '/report/counterparty',
+    500,
     (n) => onProgress?.({ stage: 'reports', count: n }),
   );
   const debtors = reports.filter((r) => r.balance < 0);
   if (debtors.length === 0) return [];
 
-  const out: DebtCandidate[] = [];
-  let done = 0;
-  const total = debtors.length;
-  const queue = [...debtors];
-  const workerCount = Math.min(5, queue.length);
-  const workers = Array.from({ length: workerCount }, async () => {
-    while (queue.length) {
-      const r = queue.shift();
-      if (!r) break;
-      const cpId = extractUuid(r.counterparty?.meta?.href);
-      if (!cpId) {
-        done += 1;
-        onProgress?.({ stage: 'cards', done, total });
-        continue;
-      }
-      const cp = await fetchEntity<MsCounterparty>(token, `/entity/counterparty/${cpId}`);
-      out.push({
-        demandId: cpId,
-        demandName: r.demandsCount ? `${r.demandsCount} отгрузок` : '—',
-        demandMoment: r.lastDemandDate ?? new Date().toISOString(),
-        demandSum: (r.demandsSum ?? 0) / 100,
-        counterpartyId: cpId,
-        counterpartyName: cp?.name ?? `Контрагент ${cpId.slice(0, 8)}`,
-        counterpartyPhone: cp?.phone,
-        balance: r.balance / 100,
-        debtAmount: Math.abs(r.balance) / 100,
-      });
-      done += 1;
-      onProgress?.({ stage: 'cards', done, total });
-    }
+  const ids = debtors
+    .map((r) => extractUuid(r.counterparty?.meta?.href))
+    .filter((id): id is string => !!id);
+
+  const cards = await fetchCounterpartiesBatch(token, ids, (done, total) =>
+    onProgress?.({ stage: 'cards', done, total }),
+  );
+
+  const out: DebtCandidate[] = debtors.map((r) => {
+    const cpId = extractUuid(r.counterparty?.meta?.href) ?? '';
+    const cp = cards.get(cpId);
+    return {
+      demandId: cpId,
+      demandName: r.demandsCount ? `${r.demandsCount} отгрузок` : '—',
+      demandMoment: r.lastDemandDate ?? new Date().toISOString(),
+      demandSum: (r.demandsSum ?? 0) / 100,
+      counterpartyId: cpId,
+      counterpartyName: cp?.name ?? `Контрагент ${cpId.slice(0, 8)}`,
+      counterpartyPhone: cp?.phone,
+      balance: r.balance / 100,
+      debtAmount: Math.abs(r.balance) / 100,
+    };
   });
-  await Promise.all(workers);
   return out.sort((a, b) => b.debtAmount - a.debtAmount);
 }
