@@ -8,7 +8,7 @@
 
 import { buildInventoryReport } from '../analytics/inventory';
 import { buildAbcReport, summarizeAbc } from '../analytics/abc';
-import { buildXyzReport, summarizeXyz } from '../analytics/xyz';
+import { buildXyzReport } from '../analytics/xyz';
 import { buildRfmReport, summarizeRfm } from '../analytics/rfm';
 import type { AnalyticsResult } from '../moysklad/browser';
 import type { DebtCandidate } from '../moysklad/debts';
@@ -58,7 +58,13 @@ export function buildShopContext(opts: {
   const abcRows = buildAbcReport(data.abc);
   const abcCounts = summarizeAbc(abcRows);
   const xyzRows = buildXyzReport(data.xyz);
-  const xyzCounts = summarizeXyz(xyzRows);
+  const xyzCounts = xyzRows.reduce(
+    (acc, r) => {
+      acc[r.class] += 1;
+      return acc;
+    },
+    { X: 0, Y: 0, Z: 0 } as Record<'X' | 'Y' | 'Z', number>,
+  );
   const rfmScored = buildRfmReport(data.rfm);
   const rfmSummary = summarizeRfm(rfmScored);
 

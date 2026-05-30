@@ -5,7 +5,7 @@ import { Sparkles, Send, Loader2, KeyRound, RotateCcw, Lightbulb } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useT } from '@/lib/i18n/provider';
-import { askAi, saveAiConfig, type AiMessage } from '@/lib/ai-config';
+import { askAiStream, saveAiConfig, type AiMessage } from '@/lib/ai-config';
 
 export function AiView({
   context,
@@ -39,15 +39,22 @@ export function AiView({
     if (!q || loading) return;
     setInput('');
     setError(null);
-    const next = [...messages, { role: 'user' as const, content: q }];
-    setMessages(next);
+    const next: AiMessage[] = [...messages, { role: 'user', content: q }];
+    // показываем пустой ответ ассистента и стримим в него
+    setMessages([...next, { role: 'assistant', content: '' }]);
     setLoading(true);
-    const res = await askAi(next, context);
-    if (res.ok) {
-      setMessages([...next, { role: 'assistant', content: res.text }]);
-    } else {
+
+    let acc = '';
+    const res = await askAiStream(next, context, (chunk) => {
+      acc += chunk;
+      setMessages([...next, { role: 'assistant', content: acc }]);
+    });
+
+    if (!res.ok) {
       if (res.needKey) setNeedKey(true);
       setError(res.error);
+      // убираем пустой placeholder ассистента
+      setMessages(next);
     }
     setLoading(false);
   }
@@ -114,23 +121,25 @@ export function AiView({
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {messages.map((m, i) => (
-                <div
-                  key={i}
-                  className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
-                >
+              {messages.map((m, i) =>
+                m.role === 'assistant' && m.content === '' ? null : (
                   <div
-                    className={
-                      m.role === 'user'
-                        ? 'max-w-[80%] rounded-2xl rounded-br-md bg-(--color-primary) px-4 py-2.5 text-[13px] text-(--color-primary-fg)'
-                        : 'max-w-[85%] rounded-2xl rounded-bl-md bg-(--color-muted) px-4 py-3 text-[13px] text-(--color-fg)'
-                    }
+                    key={i}
+                    className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
                   >
-                    {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
+                    <div
+                      className={
+                        m.role === 'user'
+                          ? 'max-w-[80%] rounded-2xl rounded-br-md bg-(--color-primary) px-4 py-2.5 text-[13px] text-(--color-primary-fg)'
+                          : 'max-w-[85%] rounded-2xl rounded-bl-md bg-(--color-muted) px-4 py-3 text-[13px] text-(--color-fg)'
+                      }
+                    >
+                      {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {loading && (
+                ),
+              )}
+              {loading && messages[messages.length - 1]?.content === '' && (
                 <div className="flex justify-start">
                   <div className="flex items-center gap-2 rounded-2xl rounded-bl-md bg-(--color-muted) px-4 py-3 text-[13px] text-(--color-muted-fg)">
                     <Loader2 size={14} className="animate-spin" />

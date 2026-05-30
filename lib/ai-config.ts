@@ -45,13 +45,22 @@ export function clearAiConfig(): void {
 
 export type AiMessage = { role: 'user' | 'assistant'; content: string };
 
-export async function askAi(
+export type AskResult = { ok: true } | { ok: false; error: string; needKey?: boolean };
+
+/**
+ * Спрашивает ИИ и стримит ответ по кусочкам через onChunk.
+ * Ошибки до начала потока (нет ключа, неверный ключ) приходят JSON-ом и
+ * возвращаются как { ok:false }. Иначе текст идёт чанками и в конце { ok:true }.
+ */
+export async function askAiStream(
   messages: AiMessage[],
   context: unknown,
-): Promise<{ ok: true; text: string } | { ok: false; error: string; needKey?: boolean }> {
+  onChunk: (text: string) => void,
+): Promise<AskResult> {
   const cfg = loadAiConfig();
+  let res: Response;
   try {
-    const res = await fetch('/api/ai/chat', {
+    res = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -61,16 +70,30 @@ export async function askAi(
         model: cfg?.model,
       }),
     });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: data?.detail || data?.error || `HTTP ${res.status}`,
-        needKey: data?.error === 'no_key',
-      };
-    }
-    return { ok: true, text: data.text ?? '' };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => null);
+    return {
+      ok: false,
+      error: data?.detail || data?.error || `HTTP ${res.status}`,
+      needKey: data?.error === 'no_key',
+    };
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const text = decoder.decode(value, { stream: true });
+      if (text) onChunk(text);
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  return { ok: true };
 }
