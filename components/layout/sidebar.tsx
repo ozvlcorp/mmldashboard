@@ -9,12 +9,13 @@ import {
   Settings,
   HelpCircle,
   LogOut,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useT } from '@/lib/i18n/provider';
 import type { DictKey } from '@/lib/i18n/dict';
 
-export type NavKey = 'inventory' | 'abc' | 'xyz' | 'rfm' | 'debts';
+export type NavKey = 'inventory' | 'abc' | 'xyz' | 'rfm' | 'debts' | 'ai';
 
 type NavItem = {
   key: NavKey;
@@ -37,6 +38,10 @@ const navGroups: { label: DictKey; items: NavItem[] }[] = [
     label: 'nav.section.ops',
     items: [{ key: 'debts', label: 'nav.debts', icon: Wallet, badge: '4' }],
   },
+  {
+    label: 'nav.section.assistant',
+    items: [{ key: 'ai', label: 'nav.ai', icon: Sparkles }],
+  },
 ];
 
 export function Sidebar({
@@ -55,15 +60,12 @@ export function Sidebar({
   debtorsBadge?: string;
 }) {
   const { t } = useT();
-  const groups: typeof navGroups = [
-    navGroups[0],
-    {
-      ...navGroups[1],
-      items: navGroups[1].items.map((it) =>
-        it.key === 'debts' ? { ...it, badge: debtorsBadge ?? it.badge } : it,
-      ),
-    },
-  ];
+  const groups: typeof navGroups = navGroups.map((g) => ({
+    ...g,
+    items: g.items.map((it) =>
+      it.key === 'debts' ? { ...it, badge: debtorsBadge ?? it.badge } : it,
+    ),
+  }));
   return (
     <aside className="hidden lg:flex flex-col w-[260px] shrink-0 h-screen sticky top-0 bg-white border-r border-(--color-border) px-4 py-5">
       <div className="flex items-center gap-2.5 px-2 mb-7 oy-anim-fade">

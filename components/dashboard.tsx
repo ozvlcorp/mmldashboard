@@ -8,6 +8,7 @@ import { AbcView } from '@/components/views/abc-view';
 import { XyzView } from '@/components/views/xyz-view';
 import { RfmView } from '@/components/views/rfm-view';
 import { DebtsView } from '@/components/views/debts-view';
+import { AiView } from '@/components/views/ai-view';
 import { useT } from '@/lib/i18n/provider';
 import type { DictKey } from '@/lib/i18n/dict';
 import type { InventoryInput } from '@/lib/analytics/inventory';
@@ -24,6 +25,7 @@ const pageMeta: Record<NavKey, { title: DictKey; subtitle: DictKey }> = {
   xyz: { title: 'page.xyz.title', subtitle: 'page.xyz.subtitle' },
   rfm: { title: 'page.rfm.title', subtitle: 'page.rfm.subtitle' },
   debts: { title: 'page.debts.title', subtitle: 'page.debts.subtitle' },
+  ai: { title: 'page.ai.title', subtitle: 'page.ai.subtitle' },
 };
 
 export function Dashboard({
@@ -51,6 +53,7 @@ export function Dashboard({
   onLogout,
   debtorsBadge,
   turnoverTrend,
+  aiContext,
 }: {
   inventory: InventoryInput[];
   abc: AbcInput[];
@@ -76,6 +79,7 @@ export function Dashboard({
   onLogout?: () => void;
   debtorsBadge?: string;
   turnoverTrend?: { value: number; positive?: boolean };
+  aiContext?: unknown;
 }) {
   const [active, setActive] = useState<NavKey>('inventory');
   const { t, lang, nonce } = useT();
@@ -126,6 +130,9 @@ export function Dashboard({
                 onCreateTask={onCreateDebtorTask}
                 assigneeName={assigneeName}
               />
+            )}
+            {active === 'ai' && (
+              <AiView context={aiContext} isLive={source === 'moysklad'} />
             )}
           </div>
         </main>

@@ -24,6 +24,7 @@ import {
   type LoadProgress,
 } from '@/lib/moysklad/browser';
 import type { DebtCandidate } from '@/lib/moysklad/debts';
+import { buildShopContext } from '@/lib/ai/context';
 import {
   DEMO_INVENTORY,
   DEMO_ABC,
@@ -342,6 +343,21 @@ export function HomeClient() {
     turnoverTrend = { value: Number(diff.toFixed(1)), positive: diff >= 0 };
   }
 
+  // Контекст для ИИ-консультанта: компактная выжимка из загруженной аналитики
+  const aiContext = React.useMemo(() => {
+    if (!data) return null;
+    try {
+      return buildShopContext({
+        data,
+        debtors,
+        currency: currency?.symbol ?? 'сум',
+        horizonDays: 10,
+      });
+    } catch {
+      return null;
+    }
+  }, [data, debtors, currency]);
+
   return (
     <div>
       <div
@@ -437,6 +453,7 @@ export function HomeClient() {
         onLogout={isLive ? disconnect : undefined}
         debtorsBadge={isLive ? (debtors?.length ? String(debtors.length) : undefined) : '4'}
         turnoverTrend={turnoverTrend}
+        aiContext={aiContext}
       />
 
       <ConnectDialog
