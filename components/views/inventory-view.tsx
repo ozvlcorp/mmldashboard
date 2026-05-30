@@ -53,25 +53,61 @@ export function InventoryView({
   ]);
   const { rows, totals } = report;
 
+  type FilterKind = 'stock' | 'income' | 'mml' | 'oos' | 'frozen';
+  const FILTERS: Record<
+    FilterKind,
+    {
+      label: string;
+      predicate: (r: InventoryRow) => boolean;
+      sort: { key: string; dir: 'asc' | 'desc' };
+    }
+  > = {
+    stock: {
+      label: 'есть на складе',
+      predicate: (r) => r.stockValue > 0,
+      sort: { key: 'stockValue', dir: 'desc' },
+    },
+    income: {
+      label: 'приносят доход',
+      predicate: (r) => r.dailyGross > 0,
+      sort: { key: 'daily', dir: 'desc' },
+    },
+    mml: {
+      label: '★ MML — топ выручки',
+      predicate: (r) => r.mmlFlag,
+      sort: { key: 'daily', dir: 'desc' },
+    },
+    oos: {
+      label: 'есть потери OOS',
+      predicate: (r) => r.oosLoss > 0,
+      sort: { key: 'oosFrozen', dir: 'asc' },
+    },
+    frozen: {
+      label: 'заморожен капитал',
+      predicate: (r) => r.frozenMoney > 0,
+      sort: { key: 'oosFrozen', dir: 'desc' },
+    },
+  };
+
   const tableRef = useRef<HTMLDivElement>(null);
+  const [filter, setFilter] = useState<FilterKind | null>(null);
   const [tableSort, setTableSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({
     key: 'stockValue',
     dir: 'desc',
   });
-  const [mmlOnly, setMmlOnly] = useState(false);
 
   const displayedRows = useMemo(
-    () => (mmlOnly ? rows.filter((r) => r.mmlFlag) : rows),
-    [rows, mmlOnly],
+    () => (filter ? rows.filter(FILTERS[filter].predicate) : rows),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, filter],
   );
 
-  const sortBy = (key: string, dir: 'asc' | 'desc') => {
-    setTableSort({ key, dir });
-    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  const toggleMmlOnly = () => {
-    setMmlOnly((prev) => !prev);
+  const toggleFilter = (k: FilterKind) => {
+    setFilter((prev) => {
+      const next = prev === k ? null : k;
+      if (next) setTableSort(FILTERS[k].sort);
+      return next;
+    });
     tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -259,8 +295,9 @@ export function InventoryView({
             icon: Boxes, accent: 'indigo' as const,
             spark: genSpark(totals.stockValue, 12, 0.08, 1),
             tooltip: 'Сумма всех остатков по закупочным ценам',
-            advice: 'Клик — сортировать по стоимости остатка',
-            onClick: () => sortBy('stockValue', 'desc'),
+            advice: 'Клик — показать только товары которые сейчас на складе',
+            onClick: () => toggleFilter('stock'),
+            className: filter === 'stock' ? 'ring-2 ring-(--color-primary)/30' : '',
           },
           {
             label: t('kpi.dailyIncome'),
@@ -270,19 +307,21 @@ export function InventoryView({
             spark: genSpark(totals.dailyGross, 12, 0.18, 2),
             trend: turnoverTrend,
             tooltip: 'Маржинальный доход в день: (цена − себестоимость) × средние продажи',
-            advice: 'Стрелочка — сравнение с предыдущим периодом такой же длины',
-            onClick: () => sortBy('daily', 'desc'),
+            advice: 'Клик — показать только товары с продажами',
+            onClick: () => toggleFilter('income'),
+            className: filter === 'income' ? 'ring-2 ring-(--color-success)/40' : '',
           },
           {
             label: t('kpi.mmlShare'),
             value: fmt.pct(totals.mmlShare),
-            hint: mmlOnly ? t('kpi.mmlHintOn') : t('kpi.mmlHint'),
+            hint: filter === 'mml' ? t('kpi.mmlHintOn') : t('kpi.mmlHint'),
             icon: Rocket,
             accent: 'violet' as const,
             spark: genSpark(totals.mmlShare, 12, 0.05, 3),
-            tooltip: 'MML (Minimum Marketing List) — товары, которые дают ~80% выручки. Их нельзя пускать в OOS.',
-            advice: mmlOnly ? 'Клик — выключить фильтр' : 'Клик — оставить только ★ MML-товары',
-            onClick: toggleMmlOnly,
+            tooltip: 'MML (Minimum Marketing List) — товары которые дают ~80% выручки. Их нельзя пускать в OOS.',
+            advice: 'Клик — показать только ★ MML-товары',
+            onClick: () => toggleFilter('mml'),
+            className: filter === 'mml' ? 'ring-2 ring-(--color-primary)/40' : '',
           },
           {
             label: t('kpi.oosLoss', { days: horizonDays }),
@@ -290,8 +329,9 @@ export function InventoryView({
             icon: AlertTriangle, accent: 'rose' as const,
             spark: genSpark(totals.lostProfit, 12, 0.25, 4),
             tooltip: `Сколько прибыли потеряно из-за дефицита (OOS) за ${horizonDays} дней`,
-            advice: 'Закупите товары с самым большим OOS первыми',
-            onClick: () => sortBy('oosFrozen', 'asc'),
+            advice: 'Клик — показать только товары с потерями OOS',
+            onClick: () => toggleFilter('oos'),
+            className: filter === 'oos' ? 'ring-2 ring-(--color-danger)/40' : '',
           },
           {
             label: t('kpi.frozen'), value: fmt.money(totals.frozenMoney, currency),
@@ -299,14 +339,15 @@ export function InventoryView({
             icon: Snowflake, accent: 'amber' as const,
             spark: genSpark(totals.frozenMoney, 12, 0.05, 5),
             tooltip: 'Капитал в товарах сверх норматива — лежит, продаётся медленно',
-            advice: 'Распродайте излишки и не закупайте этот ассортимент',
-            onClick: () => sortBy('oosFrozen', 'desc'),
+            advice: 'Клик — показать только товары с замороженным капиталом',
+            onClick: () => toggleFilter('frozen'),
+            className: filter === 'frozen' ? 'ring-2 ring-(--color-warning)/40' : '',
           },
           {
             label: t('kpi.upliftAtZero'), value: `+${fmt.pct(totals.profitUpliftPct)}`,
             hint: t('kpi.upliftHint', { x: fmt.num(totals.profitUpliftX, 2) }),
             icon: Wallet, accent: 'cyan' as const,
-            tooltip: 'Насколько выросла бы прибыль, если устранить все OOS',
+            tooltip: 'Насколько выросла бы прибыль если устранить все OOS',
             advice: 'Цель — приблизить к 0%: чем меньше дефицита, тем больше выручки',
           },
         ].map((k, i) => (
@@ -322,16 +363,18 @@ export function InventoryView({
             <div>
               <CardTitle>Аналитика по товарам</CardTitle>
               <CardDescription>
-                {displayedRows.length} {mmlOnly ? `★ MML из ${inputs.length}` : 'позиций'} · кликните по заголовку столбца для сортировки
+                {filter
+                  ? `${displayedRows.length} из ${inputs.length} · фильтр: ${FILTERS[filter].label}`
+                  : `${inputs.length} позиций · кликните по заголовку столбца для сортировки`}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              {mmlOnly && (
+              {filter && (
                 <button
-                  onClick={toggleMmlOnly}
+                  onClick={() => setFilter(null)}
                   className="inline-flex items-center gap-1.5 rounded-md bg-(--color-primary-soft) px-2 py-1 text-[11px] font-semibold text-(--color-primary-soft-fg) hover:bg-(--color-primary-soft)/70"
                 >
-                  ★ MML · сбросить
+                  Сбросить фильтр
                 </button>
               )}
               <Badge variant="primary">{horizonDays} дн</Badge>
@@ -340,7 +383,7 @@ export function InventoryView({
         </CardHeader>
         <CardContent className="px-0 py-0">
           <DataTable
-            key={`inv-${tableSort.key}-${tableSort.dir}`}
+            key={`inv-${filter ?? 'all'}-${tableSort.key}-${tableSort.dir}`}
             data={displayedRows}
             columns={columns}
             rowKey={(r) => r.id}
