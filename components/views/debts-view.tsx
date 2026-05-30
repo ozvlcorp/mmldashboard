@@ -10,7 +10,7 @@ import {
   MessageCircle,
   Plus,
 } from 'lucide-react';
-import { fmt, cn } from '@/lib/utils';
+import { fmt } from '@/lib/utils';
 import {
   Card,
   CardContent,
@@ -24,44 +24,91 @@ import { Button } from '@/components/ui/button';
 import { KpiTile } from '@/components/kpi-tile';
 import { useT } from '@/lib/i18n/provider';
 import type { DebtCandidate } from '@/lib/moysklad/debts';
+import { loadTelegramConfig, sendTelegram } from '@/lib/telegram-config';
 
 export function DebtsView({
   initialDebtors = [],
   currency = 'сум',
+  onScan,
+  scanning = false,
+  scanProgress,
+  scanError,
+  onCreateTask,
+  assigneeName,
 }: {
   initialDebtors?: DebtCandidate[];
   currency?: string;
+  onScan?: () => void;
+  scanning?: boolean;
+  scanProgress?: string | null;
+  scanError?: string | null;
+  onCreateTask?: (d: DebtCandidate) => Promise<{ taskId: string }>;
+  assigneeName?: string | null;
 }) {
   const { t } = useT();
-  const [debtors, setDebtors] = useState<DebtCandidate[]>(initialDebtors);
+  const debtors = initialDebtors;
   const [taskCreated, setTaskCreated] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
 
   const totalDebt = debtors.reduce((s, d) => s + d.debtAmount, 0);
   const avgDebt = debtors.length > 0 ? totalDebt / debtors.length : 0;
 
-  const handleCreateTask = (d: DebtCandidate) => {
+  const handleCreateTask = async (d: DebtCandidate) => {
     setBusy(d.demandId);
-    setTimeout(() => {
+    setTaskErrors((prev) => {
+      const next = { ...prev };
+      delete next[d.demandId];
+      return next;
+    });
+    try {
+      if (onCreateTask) {
+        await onCreateTask(d);
+      } else {
+        // demo-режим: фейк, чтобы кнопка визуально работала на демо-данных
+        await new Promise((r) => setTimeout(r, 400));
+      }
       setTaskCreated((prev) => new Set(prev).add(d.demandId));
+    } catch (e) {
+      setTaskErrors((prev) => ({
+        ...prev,
+        [d.demandId]: e instanceof Error ? e.message : String(e),
+      }));
+    } finally {
       setBusy(null);
-    }, 400);
+    }
   };
 
-  const handleTelegram = (d: DebtCandidate) => {
-    const text = `Здравствуйте! Напоминаем о задолженности ${fmt.money(d.debtAmount)} сум по отгрузке ${d.demandName}.`;
-    const url = new URL('/api/telegram/send', window.location.origin);
-    if (d.counterpartyPhone) url.searchParams.set('phone', d.counterpartyPhone);
-    url.searchParams.set('text', text);
-    window.open(url.toString(), '_blank');
-  };
-
-  const handleRescan = () => {
-    setBusy('scan');
-    setTimeout(() => {
-      setDebtors(initialDebtors);
-      setBusy(null);
-    }, 600);
+  const handleTelegram = async (d: DebtCandidate) => {
+    const cfg = loadTelegramConfig();
+    if (!cfg) {
+      setTaskErrors((prev) => ({
+        ...prev,
+        [d.demandId]: 'Telegram не подключён — Настройки → Telegram',
+      }));
+      return;
+    }
+    setBusy('tg-' + d.demandId);
+    setTaskErrors((prev) => {
+      const next = { ...prev };
+      delete next[d.demandId];
+      return next;
+    });
+    const text =
+      `<b>Должник</b>\n` +
+      `${d.counterpartyName}\n` +
+      (d.counterpartyPhone ? `📞 ${d.counterpartyPhone}\n` : '') +
+      `\n<b>Долг:</b> ${fmt.money(d.debtAmount)} сум` +
+      `\n<b>Отгрузок:</b> ${d.demandName}` +
+      `\n<b>Последняя активность:</b> ${new Date(d.demandMoment).toLocaleDateString('ru-RU')}`;
+    const r = await sendTelegram(text, cfg);
+    if (!r.ok) {
+      setTaskErrors((prev) => ({
+        ...prev,
+        [d.demandId]: r.error ?? 'Telegram failed',
+      }));
+    }
+    setBusy(null);
   };
 
   const columns: Column<DebtCandidate>[] = [
@@ -152,15 +199,26 @@ export function DebtsView({
       header: 'Статус',
       align: 'center',
       width: 150,
-      render: (d) =>
-        taskCreated.has(d.demandId) ? (
-          <Badge variant="success">
-            <CheckCircle2 size={11} className="mr-1" />
-            Задача создана
-          </Badge>
-        ) : (
-          <Badge variant="warning">Ожидает</Badge>
-        ),
+      render: (d) => (
+        <div className="flex flex-col items-center gap-1">
+          {taskCreated.has(d.demandId) ? (
+            <Badge variant="success">
+              <CheckCircle2 size={11} className="mr-1" />
+              Задача создана
+            </Badge>
+          ) : (
+            <Badge variant="warning">Ожидает</Badge>
+          )}
+          {taskErrors[d.demandId] && (
+            <span
+              className="max-w-[140px] truncate text-[10px] text-rose-600"
+              title={taskErrors[d.demandId]}
+            >
+              {taskErrors[d.demandId]}
+            </span>
+          )}
+        </div>
+      ),
       sortAccessor: (d) => (taskCreated.has(d.demandId) ? 1 : 0),
       exportValue: (d) => (taskCreated.has(d.demandId) ? 'Задача создана' : 'Ожидает'),
     },
@@ -188,9 +246,13 @@ export function DebtsView({
             size="sm"
             variant="secondary"
             onClick={() => handleTelegram(d)}
-            disabled={!d.counterpartyPhone}
+            disabled={busy === 'tg-' + d.demandId}
           >
-            <MessageCircle size={13} />
+            {busy === 'tg-' + d.demandId ? (
+              <RefreshCw size={13} className="animate-spin" />
+            ) : (
+              <MessageCircle size={13} />
+            )}
             Telegram
           </Button>
         </div>
@@ -201,16 +263,16 @@ export function DebtsView({
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="oy-anim-card oy-stagger-1">
+        <div className="oy-anim-card oy-stagger-1 h-full">
           <KpiTile label={t('kpi.debtorsCount')} value={fmt.int(debtors.length)} icon={Users} accent="rose" />
         </div>
-        <div className="oy-anim-card oy-stagger-2">
+        <div className="oy-anim-card oy-stagger-2 h-full">
           <KpiTile label={t('kpi.totalDebt')} value={fmt.money(totalDebt, currency)} icon={Coins} accent="rose" trend={{ value: 8.2, positive: false }} />
         </div>
-        <div className="oy-anim-card oy-stagger-3">
+        <div className="oy-anim-card oy-stagger-3 h-full">
           <KpiTile label={t('kpi.avgDebt')} value={fmt.money(avgDebt, currency)} icon={AlertCircle} accent="amber" />
         </div>
-        <div className="oy-anim-card oy-stagger-4">
+        <div className="oy-anim-card oy-stagger-4 h-full">
           <KpiTile
             label={t('kpi.tasksCreated')}
             value={`${taskCreated.size} / ${debtors.length}`}
@@ -226,22 +288,51 @@ export function DebtsView({
             <div>
               <CardTitle>{t('card.debtors')}</CardTitle>
               <CardDescription>{t('card.debtors.desc')}</CardDescription>
+              {assigneeName && (
+                <div className="mt-1 text-[11px] text-(--color-muted-fg)">
+                  Задачи будут назначены: <span className="font-medium text-(--color-fg)">{assigneeName}</span>
+                </div>
+              )}
             </div>
-            <Button variant="outline" size="sm" onClick={handleRescan} disabled={busy === 'scan'}>
-              <RefreshCw size={13} className={busy === 'scan' ? 'animate-spin' : ''} />
-              {busy === 'scan' ? t('card.scanning') : t('card.scanDebt')}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onScan}
+              disabled={scanning || !onScan}
+            >
+              <RefreshCw size={13} className={scanning ? 'animate-spin' : ''} />
+              {scanning ? t('card.scanning') : t('card.scanDebt')}
             </Button>
           </div>
+          {scanProgress && (
+            <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-(--color-primary)/30 bg-(--color-primary-soft) px-2.5 py-1 text-[11px] font-medium text-(--color-primary-soft-fg)">
+              <RefreshCw size={11} className="animate-spin" />
+              {scanProgress}
+            </div>
+          )}
+          {scanError && (
+            <div className="mt-2 rounded-md border border-rose-300/50 bg-rose-50/70 px-2.5 py-1 text-[11px] text-rose-700">
+              {scanError}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="px-0 py-0">
-          <DataTable
-            data={debtors}
-            columns={columns}
-            rowKey={(d) => d.demandId}
-            defaultSort={{ key: 'debt', dir: 'desc' }}
-            tableId="debts"
-            exportName="OY_Analytics_Debts"
-          />
+          {debtors.length === 0 && !scanning ? (
+            <div className="px-6 py-10 text-center text-[13px] text-(--color-muted-fg)">
+              {onScan
+                ? 'Нажмите «Запустить сканирование» — найдём контрагентов с отрицательным балансом.'
+                : 'Должников не найдено.'}
+            </div>
+          ) : (
+            <DataTable
+              data={debtors}
+              columns={columns}
+              rowKey={(d) => d.demandId}
+              defaultSort={{ key: 'debt', dir: 'desc' }}
+              tableId="debts"
+              exportName="OY_Analytics_Debts"
+            />
+          )}
         </CardContent>
       </Card>
 

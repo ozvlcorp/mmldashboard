@@ -49,7 +49,15 @@ export type InventoryReport = {
 
 export type InventoryOptions = {
   horizonDays?: number;     // горизонт расчёта (по умолчанию 10 как в исходной таблице)
-  mmlShareThreshold?: number; // доля валового дохода для попадания в MML (по умолчанию 15%)
+  /**
+   * Кумулятивная доля выручки для попадания в MML.
+   * Сортируем товары по share по убыванию и помечаем верхние, пока их
+   * суммарная доля не достигнет порога. По умолчанию 0.80 (≈ABC класс A).
+   * Раньше использовалось per-item threshold 15% — это работало только
+   * на маленьких каталогах (10-50 SKU). На каталоге в 1000+ SKU ни один
+   * товар по отдельности не наберёт 15%, и MML всегда был пустым.
+   */
+  mmlCumulativeShare?: number;
 };
 
 export function buildInventoryReport(
@@ -57,7 +65,7 @@ export function buildInventoryReport(
   opts: InventoryOptions = {},
 ): InventoryReport {
   const horizonDays = opts.horizonDays ?? 10;
-  const mmlThreshold = opts.mmlShareThreshold ?? 0.15;
+  const mmlCum = opts.mmlCumulativeShare ?? 0.80;
 
   const partial = inputs.map((r) => {
     const stockValue = r.stock * r.costPrice;
@@ -66,14 +74,16 @@ export function buildInventoryReport(
     const margin = r.salePrice > 0 ? (r.salePrice - r.costPrice) / r.salePrice : 0;
     const markup = r.costPrice > 0 ? (r.salePrice - r.costPrice) / r.costPrice : 0;
 
-    // OOS только если запас МЕНЬШЕ норматива
+    // OOS только если запас МЕНЬШЕ норматива (avgDailySales=0 → stockDays=∞ → false → 0)
     const oosLoss =
       stockDays < r.normDays ? (r.normDays - stockDays) * dailyGross : 0;
-    // Замороженные деньги — только если запас БОЛЬШЕ норматива
-    const frozenMoney =
-      stockDays > r.normDays
-        ? (stockDays - r.normDays) * r.avgDailySales * r.costPrice
-        : 0;
+    // Замороженные деньги = всё, что лежит на складе сверх норматива.
+    // Эквивалентная формула: stockValue - normDays * avgDailySales * costPrice
+    // (избегает Infinity * 0 = NaN, когда avgDailySales = 0)
+    const frozenMoney = Math.max(
+      0,
+      stockValue - r.normDays * r.avgDailySales * r.costPrice,
+    );
     const frozenShare = stockValue > 0 ? frozenMoney / stockValue : 0;
 
     return {
@@ -91,14 +101,28 @@ export function buildInventoryReport(
 
   const totalDailyGross = partial.reduce((s, x) => s + x.dailyGross, 0);
 
-  const rows: InventoryRow[] = partial.map((r) => {
-    const share = totalDailyGross > 0 ? r.dailyGross / totalDailyGross : 0;
-    return {
-      ...r,
-      share,
-      mmlFlag: share >= mmlThreshold,
-    };
-  });
+  const withShare = partial.map((r) => ({
+    ...r,
+    share: totalDailyGross > 0 ? r.dailyGross / totalDailyGross : 0,
+  }));
+
+  // Помечаем верхние товары по выручке, пока их суммарная доля не достигнет порога
+  const mmlIds = new Set<string>();
+  if (mmlCum > 0 && totalDailyGross > 0) {
+    const sorted = [...withShare].sort((a, b) => b.share - a.share);
+    let cum = 0;
+    for (const r of sorted) {
+      if (cum >= mmlCum) break;
+      if (r.share <= 0) break; // не помечаем товары без продаж
+      mmlIds.add(r.id);
+      cum += r.share;
+    }
+  }
+
+  const rows: InventoryRow[] = withShare.map((r) => ({
+    ...r,
+    mmlFlag: mmlIds.has(r.id),
+  }));
 
   const stockValueT = rows.reduce((s, x) => s + x.stockValue, 0);
   const oosLossT = rows.reduce((s, x) => s + x.oosLoss, 0);

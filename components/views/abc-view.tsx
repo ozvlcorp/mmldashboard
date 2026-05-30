@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Crown, Award, AlertOctagon } from 'lucide-react';
 import {
   BarChart,
@@ -36,6 +36,19 @@ export function AbcView({
   const rows = useMemo(() => buildAbcReport(inputs), [inputs]);
   const groups = useMemo(() => summarizeAbc(rows), [rows]);
 
+  const tableRef = useRef<HTMLDivElement>(null);
+  const [classFilter, setClassFilter] = useState<'A' | 'B' | 'C' | null>(null);
+  const displayedRows = useMemo(
+    () => (classFilter ? rows.filter((r) => r.class === classFilter) : rows),
+    [rows, classFilter],
+  );
+  const toggleClass = (c: 'A' | 'B' | 'C') => {
+    setClassFilter((prev) => (prev === c ? null : c));
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  const pctOfTotal = (count: number) =>
+    rows.length > 0 ? (count / rows.length) * 100 : 0;
+
   const chartData = rows.map((r) => ({
     name: r.name.length > 14 ? r.name.slice(0, 13) + '…' : r.name,
     value: r.value,
@@ -58,7 +71,7 @@ export function AbcView({
     },
     {
       key: 'class',
-      header: 'Класс',
+      header: t('col.class'),
       help: 'A — топ ~80% выручки (главные товары), B — ещё ~15% (нужно поддерживать), C — оставшиеся ~5% (можно сократить).',
       align: 'center',
       width: 90,
@@ -68,7 +81,7 @@ export function AbcView({
     },
     {
       key: 'name',
-      header: 'Товар',
+      header: t('col.product'),
       align: 'left',
       width: 280,
       minWidth: 160,
@@ -78,18 +91,18 @@ export function AbcView({
     },
     {
       key: 'value',
-      header: valueLabel,
+      header: `${valueLabel}, ${currency}`,
       help: 'Вклад товара в общую метрику (по умолчанию — выручка за период).',
       align: 'right',
-      width: 160,
-      render: (r) => <span className="font-semibold">{fmt.money(r.value)}</span>,
+      width: 180,
+      render: (r) => <span className="font-semibold">{fmt.money(r.value, currency)}</span>,
       sortAccessor: (r) => r.value,
       exportValue: (r) => Math.round(r.value),
-      exportHeader: `${valueLabel}, сум`,
+      exportHeader: `${valueLabel}, ${currency}`,
     },
     {
       key: 'share',
-      header: 'Доля',
+      header: t('col.share'),
       help: 'Какую долю от общей выручки приносит этот товар.',
       align: 'right',
       width: 110,
@@ -100,10 +113,11 @@ export function AbcView({
     },
     {
       key: 'cumShare',
-      header: 'Накопл.',
+      header: t('col.cumShare'),
       help: 'Накопленная доля — сумма долей всех товаров до этого (включая текущий). Когда переходит за 80% — товары становятся классом B; за 95% — классом C.',
       align: 'right',
-      width: 180,
+      width: 210,
+      minWidth: 180,
       render: (r) => (
         <div className="inline-flex items-center gap-2 justify-end w-full">
           <div className="w-16 h-1.5 rounded-full bg-(--color-muted) overflow-hidden">
@@ -124,31 +138,43 @@ export function AbcView({
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="oy-anim-card oy-stagger-1">
+        <div className="oy-anim-card oy-stagger-1 h-full">
           <KpiTile
             label={t('kpi.classA')}
             value={`${groups.A.count}`}
-            hint={`${fmt.pct(groups.A.share)} · ${fmt.money(groups.A.value, currency)}`}
+            hint={`${fmt.pct(groups.A.share)} выручки · ${fmt.pct(pctOfTotal(groups.A.count) / 100)} товаров · ${fmt.money(groups.A.value, currency)}`}
             icon={Crown}
             accent="emerald"
+            onClick={() => toggleClass('A')}
+            className={
+              classFilter === 'A' ? 'ring-2 ring-(--color-success)/40' : ''
+            }
           />
         </div>
-        <div className="oy-anim-card oy-stagger-2">
+        <div className="oy-anim-card oy-stagger-2 h-full">
           <KpiTile
             label={t('kpi.classB')}
             value={`${groups.B.count}`}
-            hint={`${fmt.pct(groups.B.share)} · ${fmt.money(groups.B.value, currency)}`}
+            hint={`${fmt.pct(groups.B.share)} выручки · ${fmt.pct(pctOfTotal(groups.B.count) / 100)} товаров · ${fmt.money(groups.B.value, currency)}`}
             icon={Award}
             accent="amber"
+            onClick={() => toggleClass('B')}
+            className={
+              classFilter === 'B' ? 'ring-2 ring-(--color-warning)/40' : ''
+            }
           />
         </div>
-        <div className="oy-anim-card oy-stagger-3">
+        <div className="oy-anim-card oy-stagger-3 h-full">
           <KpiTile
             label={t('kpi.classC')}
             value={`${groups.C.count}`}
-            hint={`${fmt.pct(groups.C.share)} · ${fmt.money(groups.C.value, currency)}`}
+            hint={`${fmt.pct(groups.C.share)} выручки · ${fmt.pct(pctOfTotal(groups.C.count) / 100)} товаров · ${fmt.money(groups.C.value, currency)}`}
             icon={AlertOctagon}
             accent="rose"
+            onClick={() => toggleClass('C')}
+            className={
+              classFilter === 'C' ? 'ring-2 ring-(--color-danger)/40' : ''
+            }
           />
         </div>
       </div>
@@ -216,14 +242,31 @@ export function AbcView({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card ref={tableRef}>
         <CardHeader>
-          <CardTitle>{t('app.allItems')}</CardTitle>
-          <CardDescription>{t('card.allPositions.desc', { count: rows.length })}</CardDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>{t('app.allItems')}</CardTitle>
+              <CardDescription>
+                {classFilter
+                  ? `${displayedRows.length} класса ${classFilter} из ${rows.length}`
+                  : t('card.allPositions.desc', { count: rows.length })}
+              </CardDescription>
+            </div>
+            {classFilter && (
+              <button
+                onClick={() => setClassFilter(null)}
+                className="inline-flex items-center gap-1.5 rounded-md bg-(--color-primary-soft) px-2 py-1 text-[11px] font-semibold text-(--color-primary-soft-fg) hover:bg-(--color-primary-soft)/70"
+              >
+                Класс {classFilter} · сбросить
+              </button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="px-0 py-0">
           <DataTable
-            data={rows}
+            key={`abc-${classFilter ?? 'all'}`}
+            data={displayedRows}
             columns={columns}
             rowKey={(r) => r.id}
             defaultSort={{ key: 'value', dir: 'desc' }}

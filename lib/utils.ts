@@ -5,13 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const PREFIX_CURRENCIES = new Set(['$', '€', '£', '¥', '₹']);
+
 export const fmt = {
   money(n: number | null | undefined, currency = '') {
     if (n == null || !Number.isFinite(n)) return '—';
     const sign = n < 0 ? '−' : '';
     const abs = Math.abs(n);
     const s = abs.toLocaleString('ru-RU', { maximumFractionDigits: 0 });
-    return `${sign}${s}${currency ? ' ' + currency : ''}`;
+    if (!currency) return `${sign}${s}`;
+    if (PREFIX_CURRENCIES.has(currency.trim())) {
+      return `${sign}${currency}${s}`;
+    }
+    return `${sign}${s} ${currency}`;
   },
   num(n: number | null | undefined, digits = 1) {
     if (n == null || !Number.isFinite(n)) return '—';
