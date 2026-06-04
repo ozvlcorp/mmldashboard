@@ -1,0 +1,100 @@
+name: Build Dr Laz APK
+
+# Compiles the Dr Laz Capacitor app into an installable Android APK.
+# The container that authored the app can't reach Google's servers, so the
+# Android SDK / Gradle Plugin work happens here on a GitHub-hosted runner.
+
+on:
+  push:
+    branches: [claude/gallant-darwin-4WWrm]
+    paths:
+      - 'dr-laz/**'
+      - '.github/workflows/dr-laz-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dr-laz-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dr-laz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: dr-laz/package-lock.json
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required Android SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web bundle
+        run: npm run build
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Generate app icons & splash
+        run: npx capacitor-assets generate --android
+        continue-on-error: true
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Stage APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk dr-laz-debug.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dr-laz-debug-apk
+          path: dr-laz/dr-laz-debug.apk
+          if-no-files-found: error
+
+      - name: Publish APK to a Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dr-laz-build-${{ github.run_number }}
+          name: Dr Laz — APK (build ${{ github.run_number }})
+          body: |
+            Installable debug APK for **Dr Laz** (AI medical assistant — Uzbek / Russian).
+
+            **Install:** download `dr-laz-debug.apk` below, open it on an Android phone,
+            and allow installation from this source when prompted.
+
+            Built from `dr-laz/` at commit ${{ github.sha }}.
+          files: dr-laz/dr-laz-debug.apk
+          draft: false
+          prerelease: true
+          fail_on_unmatched_files: true

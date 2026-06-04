@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732">
+  <!-- Dark splash: near-black teal field, centred mint cross. -->
+  <rect width="2732" height="2732" fill="#0b1518"/>
+  <g transform="translate(1366 1366)">
+    <rect x="-300" y="-300" width="600" height="600" rx="150" fill="#56c596" opacity="0.12"/>
+    <g fill="#56c596">
+      <rect x="-70" y="-200" width="140" height="400" rx="34"/>
+      <rect x="-200" y="-70" width="400" height="140" rx="34"/>
+    </g>
+  </g>
+</svg>

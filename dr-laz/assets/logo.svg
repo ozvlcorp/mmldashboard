@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Full app icon: deep-teal tile with a white medical cross. -->
+  <rect width="1024" height="1024" rx="208" fill="#0a4d68"/>
+  <g fill="#ffffff">
+    <rect x="417" y="252" width="190" height="520" rx="44"/>
+    <rect x="252" y="417" width="520" height="190" rx="44"/>
+  </g>
+</svg>

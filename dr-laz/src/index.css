@@ -1,0 +1,77 @@
+/* Dr Laz — global reset + native-app feel.
+   Safe-area insets (env(safe-area-inset-*)) work because index.html sets
+   viewport-fit=cover and the StatusBar plugin overlays the WebView. */
+
+:root {
+  --dl-safe-top: env(safe-area-inset-top, 0px);
+  --dl-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+  background: #0a4d68;
+}
+
+#root {
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Native feel: no accidental text selection / image drag on a phone UI. */
+.dl-noselect {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Smooth, hidden scrollbars for the scrollable content regions. */
+.dl-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.dl-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Pressable affordance — subtle press-down on tappable surfaces. */
+.dl-press {
+  cursor: pointer;
+  transition: transform 0.08s ease, opacity 0.08s ease;
+}
+.dl-press:active {
+  transform: scale(0.975);
+  opacity: 0.9;
+}
+
+@keyframes dl-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes dl-slide-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes dl-pulse-ring {
+  0% { transform: scale(0.92); opacity: 0.85; }
+  70% { transform: scale(1.12); opacity: 0; }
+  100% { opacity: 0; }
+}
