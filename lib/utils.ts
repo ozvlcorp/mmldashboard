@@ -8,11 +8,11 @@ export function cn(...inputs: ClassValue[]) {
 const PREFIX_CURRENCIES = new Set(['$', '€', '£', '¥', '₹']);
 
 export const fmt = {
-  money(n: number | null | undefined, currency = '') {
+  money(n: number | null | undefined, currency = '', maxFractionDigits = 0) {
     if (n == null || !Number.isFinite(n)) return '—';
     const sign = n < 0 ? '−' : '';
     const abs = Math.abs(n);
-    const s = abs.toLocaleString('ru-RU', { maximumFractionDigits: 0 });
+    const s = abs.toLocaleString('ru-RU', { maximumFractionDigits: maxFractionDigits });
     if (!currency) return `${sign}${s}`;
     if (PREFIX_CURRENCIES.has(currency.trim())) {
       return `${sign}${currency}${s}`;

@@ -16,6 +16,9 @@ import type { MsAssortmentItem, MsAttribute, MsDemand } from './types';
  * передайте его имя или ID в `normDaysAttribute` — значение возьмётся оттуда.
  * Иначе используется `defaultNormDays`.
  */
+/** Курс валюты к базовой: множитель = rate / multiplicity (база = 1). */
+export type CurrencyRate = { symbol: string; rate: number; multiplicity: number };
+
 export function assortmentToInventory(
   items: MsAssortmentItem[],
   demands: MsDemand[],
@@ -24,8 +27,8 @@ export function assortmentToInventory(
     defaultNormDays?: number;
     priceTypeName?: string;
     normDaysAttribute?: string; // имя или ID кастомного атрибута
-    /** Карта currencyId → отображаемый символ (например "сум", "$"). */
-    currencyByHref?: Map<string, string>;
+    /** Карта currencyId → { symbol, rate, multiplicity } для конвертации в базовую валюту. */
+    currencyByHref?: Map<string, CurrencyRate>;
   } = { periodDays: 30 },
 ): InventoryInput[] {
   const fallbackNorm = opts.defaultNormDays ?? 10;
@@ -38,17 +41,32 @@ export function assortmentToInventory(
     }
   }
 
-  const lookupCurrency = (href: string | undefined): string | undefined => {
+  const lookupRate = (href: string | undefined): CurrencyRate | undefined => {
     if (!href || !opts.currencyByHref) return undefined;
     const id = extractAssortmentId(href);
     if (!id) return undefined;
     return opts.currencyByHref.get(id);
   };
+  // Коэффициент перевода в базовую валюту. База имеет rate=1, mult=1 → 1.
+  const toBase = (cur: CurrencyRate | undefined): number =>
+    cur && cur.rate > 0 && cur.multiplicity > 0 ? cur.rate / cur.multiplicity : 1;
 
   return items.map((it) => {
-    const cost = (it.buyPrice?.value ?? 0) / 100;
-    const salePrice = pickSalePrice(it, opts.priceTypeName);
-    const sale = salePrice.value / 100;
+    const buyRate = lookupRate(it.buyPrice?.currency?.href);
+    const salePicked = pickSalePrice(it, opts.priceTypeName);
+    const saleRate = lookupRate(salePicked.currencyHref);
+
+    // Исходные цены в валюте карточки
+    const costOriginal = (it.buyPrice?.value ?? 0) / 100;
+    const saleOriginal = salePicked.value / 100;
+
+    // Конвертируем в базовую валюту аккаунта — только так маржа/наценка корректны
+    const buyMul = toBase(buyRate);
+    const saleMul = toBase(saleRate);
+    const cost = costOriginal * buyMul;
+    const sale = saleOriginal * saleMul;
+    const converted = buyMul !== 1 || saleMul !== 1;
+
     const sold = salesByProduct.get(it.id) ?? 0;
     const avgDaily = opts.periodDays > 0 ? sold / opts.periodDays : 0;
     const normDays = extractNormDays(it.attributes, opts.normDaysAttribute, fallbackNorm);
@@ -60,8 +78,11 @@ export function assortmentToInventory(
       salePrice: sale,
       avgDailySales: avgDaily,
       normDays,
-      buyCurrency: lookupCurrency(it.buyPrice?.currency?.href),
-      saleCurrency: lookupCurrency(salePrice.currencyHref),
+      buyCurrency: buyRate?.symbol,
+      saleCurrency: saleRate?.symbol,
+      costPriceOriginal: costOriginal,
+      salePriceOriginal: saleOriginal,
+      converted,
     };
   });
 }

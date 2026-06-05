@@ -258,15 +258,24 @@ async function fetchEntity<T>(token: string, path: string): Promise<T | null> {
   }
 }
 
+export type CurrencyRate = {
+  symbol: string;
+  /** Курс к базовой валюте аккаунта: 1 ед. этой валюты = rate/multiplicity базовых. */
+  rate: number;
+  multiplicity: number;
+};
+
 /**
  * Собирает уникальные UUID валют из buyPrice + salePrices у ассортимента
- * и одним батч-запросом получает их символы. Возвращает Map<uuid, symbol>,
- * который потом подмешивается в InventoryInput.{buy,sale}Currency.
+ * и одним батч-запросом получает их символ + курс (rate/multiplicity).
+ * Курс нужен чтобы конвертировать цены в базовую валюту ДО расчёта маржи:
+ * иначе у товара, купленного за $10 и проданного за 150 000 сум, маржа
+ * считалась бы как (150000 − 10) — бессмыслица.
  */
 async function fetchCurrenciesForAssortment(
   token: string,
   items: MsAssortmentItem[],
-): Promise<Map<string, string>> {
+): Promise<Map<string, CurrencyRate>> {
   const ids = new Set<string>();
   for (const it of items) {
     const buyHref = it.buyPrice?.currency?.href;
@@ -285,20 +294,27 @@ async function fetchCurrenciesForAssortment(
 
   const filter = [...ids].map((id) => `id=${id}`).join(';');
   const path = `/entity/currency?filter=${encodeURIComponent(filter)}&limit=${ids.size}`;
-  const map = new Map<string, string>();
+  const map = new Map<string, CurrencyRate>();
   try {
     const page = await fetchPage<{
       id: string;
       name?: string;
       isoCode?: string;
+      rate?: number;
+      multiplicity?: number;
     }>(token, path);
     for (const row of page.rows) {
       const iso = (row.isoCode ?? '').toUpperCase();
       const symbol = CURRENCY_SYMBOLS[iso] ?? iso ?? row.name ?? '';
-      if (symbol) map.set(row.id, symbol);
+      const rate = typeof row.rate === 'number' && row.rate > 0 ? row.rate : 1;
+      const multiplicity =
+        typeof row.multiplicity === 'number' && row.multiplicity > 0
+          ? row.multiplicity
+          : 1;
+      map.set(row.id, { symbol, rate, multiplicity });
     }
   } catch {
-    // не критично — без символов сработает fallback на глобальную валюту
+    // не критично — без курса сработает коэффициент 1 (без конвертации)
   }
   return map;
 }

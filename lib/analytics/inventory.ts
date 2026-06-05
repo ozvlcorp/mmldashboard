@@ -7,14 +7,20 @@ export type InventoryInput = {
   id: string;
   name: string;
   stock: number;          // C: остаток, шт
-  costPrice: number;      // D: закупочная цена
-  salePrice: number;      // E: цена продажи
+  costPrice: number;      // D: закупочная цена — В БАЗОВОЙ ВАЛЮТЕ (после конвертации)
+  salePrice: number;      // E: цена продажи — В БАЗОВОЙ ВАЛЮТЕ (после конвертации)
   avgDailySales: number;  // F: средние продажи в день, шт
   normDays: number;       // G: норматив запаса, дней
-  /** Символ валюты закупочной цены (из карточки товара). */
+  /** Символ валюты закупочной цены в карточке товара (для отображения исходника). */
   buyCurrency?: string;
-  /** Символ валюты цены продажи (из карточки товара). */
+  /** Символ валюты цены продажи в карточке товара (для отображения исходника). */
   saleCurrency?: string;
+  /** Исходная закупочная цена в валюте карточки (до конвертации). */
+  costPriceOriginal?: number;
+  /** Исходная цена продажи в валюте карточки (до конвертации). */
+  salePriceOriginal?: number;
+  /** Сконвертирована ли хотя бы одна из цен (валюта ≠ базовой). */
+  converted?: boolean;
 };
 
 export type InventoryRow = InventoryInput & {

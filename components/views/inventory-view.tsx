@@ -159,7 +159,7 @@ export function InventoryView({
       render: (r) => (
         <div className="leading-tight">
           <div className="font-bold text-[15px]">{fmt.int(r.stock)} <span className="text-[12px] font-medium text-(--color-muted-fg)">шт</span></div>
-          <div className="text-[12px] text-(--color-muted-fg) mt-0.5">{fmt.money(r.stockValue)}</div>
+          <div className="text-[12px] text-(--color-muted-fg) mt-0.5">{fmt.money(r.stockValue, currency)}</div>
         </div>
       ),
       sortAccessor: (r) => r.stockValue,
@@ -207,22 +207,43 @@ export function InventoryView({
     {
       key: 'prices',
       header: 'Цена',
-      help: 'Цена продажи (вверху) и закупочная цена (внизу). Валюта берётся из карточки товара в МойСклад — поэтому позиции в разных валютах показаны как есть, без конвертации.',
+      help: `Цена продажи (вверху) и закупочная (внизу) — приведены к базовой валюте (${currency}) по курсу из МойСклад. Если в карточке валюта другая, под ценой мелким шрифтом показан оригинал. Маржа и наценка считаются уже после конвертации.`,
       align: 'right',
-      width: 160,
-      render: (r) => (
-        <div className="leading-tight">
-          <div className="font-bold text-[15px]">
-            {fmt.money(r.salePrice, r.saleCurrency ?? currency)}
+      width: 170,
+      render: (r) => {
+        const saleConv = r.saleCurrency && r.saleCurrency !== currency;
+        const buyConv = r.buyCurrency && r.buyCurrency !== currency;
+        return (
+          <div className="leading-tight">
+            <div className="font-bold text-[15px]">{fmt.money(r.salePrice, currency)}</div>
+            {saleConv && r.salePriceOriginal != null && (
+              <div className="text-[10.5px] text-(--color-muted-fg)/80">
+                ориг. {fmt.money(r.salePriceOriginal, r.saleCurrency, 2)}
+              </div>
+            )}
+            <div className="mt-0.5 text-[12px] text-(--color-muted-fg)">
+              закуп. {fmt.money(r.costPrice, currency)}
+            </div>
+            {buyConv && r.costPriceOriginal != null && (
+              <div className="text-[10.5px] text-(--color-muted-fg)/80">
+                ориг. {fmt.money(r.costPriceOriginal, r.buyCurrency, 2)}
+              </div>
+            )}
           </div>
-          <div className="mt-0.5 text-[12px] text-(--color-muted-fg)">
-            закуп. {fmt.money(r.costPrice, r.buyCurrency ?? currency)}
-          </div>
-        </div>
-      ),
+        );
+      },
       sortAccessor: (r) => r.salePrice,
       exportValue: (r) => Math.round(r.salePrice),
       exportHeader: `Цена продажи, ${currency}`,
+    },
+    {
+      key: 'salePriceOrig',
+      header: 'Прод. ориг.',
+      hidden: true,
+      align: 'right',
+      render: () => null,
+      exportValue: (r) => (r.salePriceOriginal != null ? Math.round(r.salePriceOriginal) : ''),
+      exportHeader: 'Цена продажи (ориг.)',
     },
     {
       key: 'saleCurrency',
@@ -241,6 +262,15 @@ export function InventoryView({
       render: () => null,
       exportValue: (r) => Math.round(r.costPrice),
       exportHeader: `Цена закупки, ${currency}`,
+    },
+    {
+      key: 'costPriceOrig',
+      header: 'Закуп. ориг.',
+      hidden: true,
+      align: 'right',
+      render: () => null,
+      exportValue: (r) => (r.costPriceOriginal != null ? Math.round(r.costPriceOriginal) : ''),
+      exportHeader: 'Цена закупки (ориг.)',
     },
     {
       key: 'buyCurrency',
@@ -282,7 +312,7 @@ export function InventoryView({
       help: 'Сколько прибыли в день приносит этот товар. Доход/день = (продажа − закупка) × средняя дневная продажа.',
       align: 'right',
       width: 120,
-      render: (r) => <span className="font-bold text-[15px]">{fmt.money(r.dailyGross)}</span>,
+      render: (r) => <span className="font-bold text-[15px]">{fmt.money(r.dailyGross, currency)}</span>,
       sortAccessor: (r) => r.dailyGross,
       exportValue: (r) => Math.round(r.dailyGross),
     },
@@ -294,9 +324,9 @@ export function InventoryView({
       width: 160,
       render: (r) =>
         r.oosLoss > 0 ? (
-          <Badge variant="danger">−{fmt.money(r.oosLoss)}</Badge>
+          <Badge variant="danger">−{fmt.money(r.oosLoss, currency)}</Badge>
         ) : r.frozenMoney > 0 ? (
-          <Badge variant="warning">{fmt.money(r.frozenMoney)} ❄</Badge>
+          <Badge variant="warning">{fmt.money(r.frozenMoney, currency)} ❄</Badge>
         ) : (
           <span className="text-(--color-muted-fg) text-[12px]">в норме</span>
         ),
@@ -506,8 +536,8 @@ export function InventoryView({
                       </div>
                       <div className="text-[12px] text-(--color-muted-fg) mt-0.5">
                         {r.oosLoss > 0
-                          ? `Дефицит. Заказать еще, теряете ${fmt.money(r.oosLoss)} за ${horizonDays} дн.`
-                          : `Излишек запаса. Заморожено ${fmt.money(r.frozenMoney)} (${fmt.pct(r.frozenShare)}).`}
+                          ? `Дефицит. Заказать еще, теряете ${fmt.money(r.oosLoss, currency)} за ${horizonDays} дн.`
+                          : `Излишек запаса. Заморожено ${fmt.money(r.frozenMoney, currency)} (${fmt.pct(r.frozenShare)}).`}
                       </div>
                     </div>
                   </div>
