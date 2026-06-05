@@ -37,11 +37,11 @@ export type MsProduct = {
   name: string;
   code?: string;
   article?: string;
-  buyPrice?: { value: number; currency: MsMeta };
+  buyPrice?: { value: number; currency?: { meta: MsMeta } };
   salePrices?: Array<{
     value: number;
     priceType: { name: string; meta: MsMeta };
-    currency?: MsMeta;
+    currency?: { meta: MsMeta };
   }>;
   uom?: { meta: MsMeta };
   attributes?: MsAttribute[];

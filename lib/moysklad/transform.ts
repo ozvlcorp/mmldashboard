@@ -16,8 +16,8 @@ import type { MsAssortmentItem, MsAttribute, MsDemand } from './types';
  * передайте его имя или ID в `normDaysAttribute` — значение возьмётся оттуда.
  * Иначе используется `defaultNormDays`.
  */
-/** Курс валюты к базовой: множитель = rate / multiplicity (база = 1). */
-export type CurrencyRate = { symbol: string; rate: number; multiplicity: number };
+/** Валюта с множителем к базовой: 1 ед. = toBase базовых (база = 1). */
+export type CurrencyRate = { id: string; symbol: string; toBase: number };
 
 export function assortmentToInventory(
   items: MsAssortmentItem[],
@@ -27,8 +27,8 @@ export function assortmentToInventory(
     defaultNormDays?: number;
     priceTypeName?: string;
     normDaysAttribute?: string; // имя или ID кастомного атрибута
-    /** Карта currencyId → { symbol, rate, multiplicity } для конвертации в базовую валюту. */
-    currencyByHref?: Map<string, CurrencyRate>;
+    /** Карта currencyId → { symbol, toBase } для конвертации в базовую валюту. */
+    currencyById?: Map<string, CurrencyRate>;
   } = { periodDays: 30 },
 ): InventoryInput[] {
   const fallbackNorm = opts.defaultNormDays ?? 10;
@@ -41,18 +41,16 @@ export function assortmentToInventory(
     }
   }
 
+  // currency.meta.href в API МойСклад; берём id валюты и ищем курс
   const lookupRate = (href: string | undefined): CurrencyRate | undefined => {
-    if (!href || !opts.currencyByHref) return undefined;
+    if (!href || !opts.currencyById) return undefined;
     const id = extractAssortmentId(href);
     if (!id) return undefined;
-    return opts.currencyByHref.get(id);
+    return opts.currencyById.get(id);
   };
-  // Коэффициент перевода в базовую валюту. База имеет rate=1, mult=1 → 1.
-  const toBase = (cur: CurrencyRate | undefined): number =>
-    cur && cur.rate > 0 && cur.multiplicity > 0 ? cur.rate / cur.multiplicity : 1;
 
   return items.map((it) => {
-    const buyRate = lookupRate(it.buyPrice?.currency?.href);
+    const buyRate = lookupRate(it.buyPrice?.currency?.meta?.href);
     const salePicked = pickSalePrice(it, opts.priceTypeName);
     const saleRate = lookupRate(salePicked.currencyHref);
 
@@ -61,8 +59,8 @@ export function assortmentToInventory(
     const saleOriginal = salePicked.value / 100;
 
     // Конвертируем в базовую валюту аккаунта — только так маржа/наценка корректны
-    const buyMul = toBase(buyRate);
-    const saleMul = toBase(saleRate);
+    const buyMul = buyRate?.toBase ?? 1;
+    const saleMul = saleRate?.toBase ?? 1;
     const cost = costOriginal * buyMul;
     const sale = saleOriginal * saleMul;
     const converted = buyMul !== 1 || saleMul !== 1;
@@ -118,10 +116,10 @@ function pickSalePrice(
   const prices = item.salePrices ?? [];
   if (priceTypeName) {
     const match = prices.find((p) => p.priceType?.name === priceTypeName);
-    if (match) return { value: match.value, currencyHref: match.currency?.href };
+    if (match) return { value: match.value, currencyHref: match.currency?.meta?.href };
   }
   const first = prices[0];
-  return { value: first?.value ?? 0, currencyHref: first?.currency?.href };
+  return { value: first?.value ?? 0, currencyHref: first?.currency?.meta?.href };
 }
 
 function extractAssortmentId(href: string | undefined): string | null {

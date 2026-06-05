@@ -12,7 +12,6 @@ import { useT } from '@/lib/i18n/provider';
 import {
   createDebtorTask,
   loadAnalytics,
-  loadCompanyCurrency,
   loadComparison,
   loadCurrentEmployee,
   loadDebtors,
@@ -135,7 +134,6 @@ export function HomeClient() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [cacheTime, setCacheTime] = React.useState<string | null>(null);
   const [comparison, setComparison] = React.useState<ComparisonResult | null>(null);
-  const [currency, setCurrency] = React.useState<CurrencyInfo | null>(null);
 
   const createTask = React.useCallback(
     async (d: DebtCandidate): Promise<{ taskId: string }> => {
@@ -192,16 +190,6 @@ export function HomeClient() {
           })
           .catch(() => setAssignee(null));
         loadComparison(token, params).then(setComparison).catch(() => setComparison(null));
-        loadCompanyCurrency(token)
-          .then((c) => {
-            if (c) {
-              setCurrency(c);
-              writeCache(null, null, null, c);
-            }
-          })
-          .catch(() => {
-            /* ignore */
-          });
         setDebtorsScanning(true);
         setDebtorsError(null);
         loadDebtors(token, (e) => setDebtorsProgress(e))
@@ -247,7 +235,6 @@ export function HomeClient() {
     if (cached.data) setData(cached.data);
     if (cached.debtors) setDebtors(cached.debtors);
     if (cached.assignee) setAssignee(cached.assignee);
-    if (cached.currency) setCurrency(cached.currency);
     if (cached.time) setCacheTime(cached.time);
 
     const token = sessionStorage.getItem(TOKEN_KEY);
@@ -277,7 +264,6 @@ export function HomeClient() {
     setAssignee(null);
     setCacheTime(null);
     setComparison(null);
-    setCurrency(null);
   }
 
   function readStoredParams(): ConnectParams {
@@ -297,14 +283,16 @@ export function HomeClient() {
     void load(token, readStoredParams());
   }
 
-  function changePeriod(periodDays: number) {
+  function changePeriod(from: string, to: string) {
     const token = sessionStorage.getItem(TOKEN_KEY);
-    if (!token) return;
-    const params = { ...readStoredParams(), periodDays };
+    if (!token || !from || !to || from > to) return;
+    const params = { ...readStoredParams(), fromDate: from, toDate: to };
     void load(token, params);
   }
 
   const isLive = !!data;
+  // Символ валюты — из самих данных (базовая валюта аккаунта МойСклад).
+  const currencySymbol = data?.meta.currency || 'сум';
   const rawInventory = data?.inventory ?? DEMO_INVENTORY;
   const rawAbc = data?.abc ?? DEMO_ABC;
   const rawXyz = data?.xyz ?? DEMO_XYZ;
@@ -350,13 +338,13 @@ export function HomeClient() {
       return buildShopContext({
         data,
         debtors,
-        currency: currency?.symbol ?? 'сум',
+        currency: currencySymbol,
         horizonDays: 10,
       });
     } catch {
       return null;
     }
-  }, [data, debtors, currency]);
+  }, [data, debtors, currencySymbol]);
 
   return (
     <div>
@@ -435,7 +423,7 @@ export function HomeClient() {
         rfm={rfm}
         debtors={dashDebtors}
         source={isLive ? 'moysklad' : 'demo'}
-        currency={currency?.symbol ?? 'сум'}
+        currency={currencySymbol}
         horizonDays={10}
         onScanDebtors={isLive ? scanDebtors : undefined}
         debtorsScanning={debtorsScanning}
@@ -443,7 +431,8 @@ export function HomeClient() {
         debtorsError={debtorsError}
         onCreateDebtorTask={isLive && assignee ? createTask : undefined}
         assigneeName={assignee?.name ?? null}
-        periodDays={data?.meta.periodDays}
+        fromDate={data?.meta.from?.slice(0, 10)}
+        toDate={data?.meta.to?.slice(0, 10)}
         onChangePeriod={isLive ? changePeriod : undefined}
         userName={assignee?.name ?? null}
         searchQuery={searchQuery}

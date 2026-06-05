@@ -28,7 +28,25 @@ export type ConnectParams = {
   normDays: number;
   normDaysAttribute?: string;
   priceTypeName?: string;
+  /** Явный диапазон дат (YYYY-MM-DD). Если задан — имеет приоритет над periodDays. */
+  fromDate?: string;
+  toDate?: string;
 };
+
+/** Вычисляет окно [from, until] из params: явные даты в приоритете. */
+function resolveWindow(params: ConnectParams): { from: Date; until: Date; periodDays: number } {
+  if (params.fromDate && params.toDate) {
+    const from = new Date(params.fromDate + 'T00:00:00');
+    const until = new Date(params.toDate + 'T23:59:59');
+    if (Number.isFinite(from.getTime()) && Number.isFinite(until.getTime()) && from <= until) {
+      const days = Math.max(1, Math.round((until.getTime() - from.getTime()) / 86400000));
+      return { from, until, periodDays: days };
+    }
+  }
+  const until = new Date();
+  const from = new Date(until.getTime() - params.periodDays * 86400000);
+  return { from, until, periodDays: params.periodDays };
+}
 
 export type AnalyticsResult = {
   inventory: InventoryInput[];
@@ -41,7 +59,9 @@ export type AnalyticsResult = {
     to: string;
     productsCount: number;
     demandsCount: number;
-    turnover: number; // суммарная выручка за период в сумах (demand.sum / 100)
+    turnover: number; // суммарная выручка за период в базовой валюте (demand.sum / 100)
+    /** Символ базовой валюты аккаунта (например "сум"). Источник истины для UI. */
+    currency?: string;
   };
 };
 
@@ -134,8 +154,7 @@ export async function loadAnalytics(
   params: ConnectParams,
   onProgress?: (e: LoadProgress) => void,
 ): Promise<AnalyticsResult> {
-  const until = new Date();
-  const from = new Date(until.getTime() - params.periodDays * 86400000);
+  const { from, until, periodDays } = resolveWindow(params);
 
   // Ассортимент — маленькие записи, можно тащить большими страницами
   const assortment = await fetchAllParallel<MsAssortmentItem>(
@@ -158,18 +177,18 @@ export async function loadAnalytics(
     (n) => onProgress?.({ stage: 'demands', count: n }),
   );
 
-  // Подтягиваем валюты, которые встречаются у товаров — нужны для отображения
-  // цены продажи и закупки в нативной валюте каждой карточки.
-  const currencyByHref = await fetchCurrenciesForAssortment(token, assortment);
+  // Все валюты аккаунта: базовая (для аналитики) + курсы для конвертации
+  // цен из карточек товаров в базовую валюту.
+  const { base: baseCurrency, byId: currencyById } = await loadCurrencies(token);
 
   onProgress?.({ stage: 'compute' });
 
   const inventory = assortmentToInventory(assortment, demands, {
-    periodDays: params.periodDays,
+    periodDays,
     defaultNormDays: params.normDays,
     priceTypeName: params.priceTypeName,
     normDaysAttribute: params.normDaysAttribute,
-    currencyByHref,
+    currencyById,
   });
   const abc = demandsToAbc(demands);
   const xyz = demandsToXyz(demands, {
@@ -187,12 +206,13 @@ export async function loadAnalytics(
     xyz,
     rfm,
     meta: {
-      periodDays: params.periodDays,
+      periodDays,
       from: from.toISOString(),
       to: until.toISOString(),
       productsCount: assortment.length,
       demandsCount: demands.length,
       turnover,
+      currency: baseCurrency?.symbol,
     },
   };
 }
@@ -259,64 +279,67 @@ async function fetchEntity<T>(token: string, path: string): Promise<T | null> {
 }
 
 export type CurrencyRate = {
+  id: string;
   symbol: string;
-  /** Курс к базовой валюте аккаунта: 1 ед. этой валюты = rate/multiplicity базовых. */
-  rate: number;
-  multiplicity: number;
+  /** Множитель к базовой валюте: 1 ед. этой валюты = toBase базовых. */
+  toBase: number;
 };
 
 /**
- * Собирает уникальные UUID валют из buyPrice + salePrices у ассортимента
- * и одним батч-запросом получает их символ + курс (rate/multiplicity).
- * Курс нужен чтобы конвертировать цены в базовую валюту ДО расчёта маржи:
- * иначе у товара, купленного за $10 и проданного за 150 000 сум, маржа
- * считалась бы как (150000 − 10) — бессмыслица.
+ * Загружает ВСЕ валюты аккаунта одним запросом и строит:
+ *  - base: валюта по умолчанию (isDefault) — это валюта, в которой считается
+ *    вся аналитика (выручка отгрузок и т.п.);
+ *  - byId: id → { символ, множитель к базовой } для конвертации цен из
+ *    карточек товаров.
+ *
+ * Курс МойСклад: для валюты задаётся rate за multiplicity единиц.
+ * Множитель «1 ед. валюты → базовая» = rate / multiplicity, а при обратном
+ * курсе (indirect) — multiplicity / rate. У базовой валюты он равен 1.
  */
-async function fetchCurrenciesForAssortment(
+export async function loadCurrencies(
   token: string,
-  items: MsAssortmentItem[],
-): Promise<Map<string, CurrencyRate>> {
-  const ids = new Set<string>();
-  for (const it of items) {
-    const buyHref = it.buyPrice?.currency?.href;
-    if (buyHref) {
-      const id = extractUuid(buyHref);
-      if (id) ids.add(id);
-    }
-    for (const sp of it.salePrices ?? []) {
-      const href = sp.currency?.href;
-      if (!href) continue;
-      const id = extractUuid(href);
-      if (id) ids.add(id);
-    }
-  }
-  if (ids.size === 0) return new Map();
-
-  const filter = [...ids].map((id) => `id=${id}`).join(';');
-  const path = `/entity/currency?filter=${encodeURIComponent(filter)}&limit=${ids.size}`;
-  const map = new Map<string, CurrencyRate>();
+): Promise<{ base: CurrencyInfo | null; byId: Map<string, CurrencyRate> }> {
+  const byId = new Map<string, CurrencyRate>();
+  let base: CurrencyInfo | null = null;
   try {
     const page = await fetchPage<{
       id: string;
       name?: string;
+      fullName?: string;
       isoCode?: string;
       rate?: number;
       multiplicity?: number;
-    }>(token, path);
+      indirect?: boolean;
+      default?: boolean;
+      isDefault?: boolean;
+    }>(token, '/entity/currency?limit=1000');
+
     for (const row of page.rows) {
       const iso = (row.isoCode ?? '').toUpperCase();
-      const symbol = CURRENCY_SYMBOLS[iso] ?? iso ?? row.name ?? '';
+      const symbol = CURRENCY_SYMBOLS[iso] || row.name || iso || '';
       const rate = typeof row.rate === 'number' && row.rate > 0 ? row.rate : 1;
-      const multiplicity =
+      const mult =
         typeof row.multiplicity === 'number' && row.multiplicity > 0
           ? row.multiplicity
           : 1;
-      map.set(row.id, { symbol, rate, multiplicity });
+      const toBase = row.indirect ? mult / rate : rate / mult;
+      byId.set(row.id, { id: row.id, symbol, toBase: toBase > 0 ? toBase : 1 });
+
+      const isBase = row.default === true || row.isDefault === true;
+      if (isBase) {
+        base = {
+          isoCode: iso,
+          name: row.fullName || row.name || iso,
+          symbol,
+        };
+        // База переводится в саму себя 1:1, независимо от заданного курса
+        byId.set(row.id, { id: row.id, symbol, toBase: 1 });
+      }
     }
   } catch {
-    // не критично — без курса сработает коэффициент 1 (без конвертации)
+    /* без валют сработают разумные дефолты в вызывающем коде */
   }
-  return map;
+  return { base, byId };
 }
 
 /**

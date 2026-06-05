@@ -43,7 +43,8 @@ export function Dashboard({
   debtorsError,
   onCreateDebtorTask,
   assigneeName,
-  periodDays,
+  fromDate,
+  toDate,
   onChangePeriod,
   userName,
   searchQuery,
@@ -69,8 +70,9 @@ export function Dashboard({
   debtorsError?: string | null;
   onCreateDebtorTask?: CreateTaskFn;
   assigneeName?: string | null;
-  periodDays?: number;
-  onChangePeriod?: (d: number) => void;
+  fromDate?: string;
+  toDate?: string;
+  onChangePeriod?: (from: string, to: string) => void;
   userName?: string | null;
   searchQuery?: string;
   onChangeSearch?: (v: string) => void;
@@ -100,7 +102,8 @@ export function Dashboard({
           title={t(meta.title)}
           subtitle={t(meta.subtitle)}
           source={source}
-          periodDays={periodDays}
+          fromDate={fromDate}
+          toDate={toDate}
           onChangePeriod={onChangePeriod}
           userName={userName ?? undefined}
           searchQuery={searchQuery}

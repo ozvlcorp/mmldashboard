@@ -25,11 +25,27 @@ export function ConnectDialog({
   error: string | null;
 }) {
   const { t } = useT();
+  const today = React.useMemo(() => toISODate(new Date()), []);
+  const monthAgo = React.useMemo(
+    () => toISODate(new Date(Date.now() - 30 * 86400000)),
+    [],
+  );
   const [token, setToken] = React.useState('');
-  const [periodDays, setPeriodDays] = React.useState(30);
+  const [fromDate, setFromDate] = React.useState(monthAgo);
+  const [toDate, setToDate] = React.useState(today);
   const [normDays, setNormDays] = React.useState(10);
   const [normDaysAttribute, setNormDaysAttribute] = React.useState('');
   const [priceTypeName, setPriceTypeName] = React.useState('');
+
+  const periodDays = Math.max(
+    1,
+    Math.round(
+      (new Date(toDate + 'T23:59:59').getTime() -
+        new Date(fromDate + 'T00:00:00').getTime()) /
+        86400000,
+    ),
+  );
+  const rangeValid = !!fromDate && !!toDate && fromDate <= toDate;
 
   React.useEffect(() => {
     if (!open) setToken('');
@@ -37,11 +53,14 @@ export function ConnectDialog({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!rangeValid) return;
     onSubmit(token.trim(), {
       periodDays,
       normDays,
       normDaysAttribute: normDaysAttribute.trim() || undefined,
       priceTypeName: priceTypeName.trim() || undefined,
+      fromDate,
+      toDate,
     });
   }
 
@@ -82,36 +101,35 @@ export function ConnectDialog({
               />
             </Field>
 
-            <Field label={t('connect.periodDays')}>
-              <div className="flex flex-wrap gap-1.5">
-                {[7, 14, 30, 60, 90, 180, 365].map((d) => (
-                  <button
-                    key={d}
-                    type="button"
+            <Field label={t('connect.period')} hint={t('connect.periodHint', { days: periodDays })}>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-(--color-muted-fg)">{t('connect.from')}</span>
+                  <input
+                    type="date"
+                    value={fromDate}
+                    max={toDate || today}
                     disabled={loading}
-                    onClick={() => setPeriodDays(d)}
-                    className={
-                      'h-8 rounded-md border px-3 text-[12px] font-semibold transition-all ' +
-                      (periodDays === d
-                        ? 'border-(--color-primary) bg-(--color-primary) text-white shadow-[0_2px_8px_rgba(74,101,255,0.25)]'
-                        : 'border-(--color-border) bg-(--color-card) text-(--color-fg) hover:border-(--color-primary)/40 hover:bg-(--color-muted)') +
-                      ' disabled:opacity-50'
-                    }
-                  >
-                    {d} дн.
-                  </button>
-                ))}
-                <input
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={periodDays}
-                  disabled={loading}
-                  onChange={(e) => setPeriodDays(Number(e.target.value))}
-                  className="h-8 w-20 rounded-md border border-(--color-border) bg-(--color-bg) px-2 text-[12px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
-                  title="Свой период"
-                />
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="h-9 rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-(--color-muted-fg)">{t('connect.to')}</span>
+                  <input
+                    type="date"
+                    value={toDate}
+                    min={fromDate}
+                    max={today}
+                    disabled={loading}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="h-9 rounded-lg border border-(--color-border) bg-(--color-bg) px-3 text-[13px] focus:border-(--color-primary)/40 focus:outline-none focus:ring-2 focus:ring-(--color-primary)/20 disabled:opacity-60"
+                  />
+                </label>
               </div>
+              {!rangeValid && (
+                <div className="mt-1 text-[11px] text-rose-600">{t('connect.rangeError')}</div>
+              )}
             </Field>
 
             <Field label={t('connect.normDays')}>
@@ -170,7 +188,10 @@ export function ConnectDialog({
               >
                 {t('connect.cancel')}
               </Button>
-              <Button type="submit" disabled={loading || token.trim().length < 10}>
+              <Button
+                type="submit"
+                disabled={loading || token.trim().length < 10 || !rangeValid}
+              >
                 {loading && <Loader2 size={14} className="animate-spin" />}
                 {loading ? t('connect.loading') : t('connect.submit')}
               </Button>
@@ -180,6 +201,11 @@ export function ConnectDialog({
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+function toISODate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function Field({

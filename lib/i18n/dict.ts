@@ -146,6 +146,11 @@ export const dict = {
     'connect.tokenHint':
       'Получить: Профиль пользователя → Сервис → Получить токен доступа',
     'connect.periodDays': 'Период, дней',
+    'connect.period': 'Период анализа',
+    'connect.periodHint': 'Выбран период: {days} дн. Продажи берутся за этот диапазон.',
+    'connect.from': 'С',
+    'connect.to': 'По',
+    'connect.rangeError': 'Дата «С» должна быть не позже «По».',
     'connect.normDays': 'Норматив запаса, дней',
     'connect.normDaysAttribute': 'Доп. поле «Норматив запаса»',
     'connect.normDaysAttributeHint':
@@ -387,6 +392,11 @@ export const dict = {
     'connect.tokenHint':
       "Olish: Foydalanuvchi profili → Servis → Kirish tokenini olish",
     'connect.periodDays': 'Davr, kun',
+    'connect.period': 'Tahlil davri',
+    'connect.periodHint': 'Tanlangan davr: {days} kun. Sotuvlar shu oraliqdan olinadi.',
+    'connect.from': 'Dan',
+    'connect.to': 'Gacha',
+    'connect.rangeError': '«Dan» sanasi «Gacha»dan keyin bo\'lmasligi kerak.',
     'connect.normDays': "Zaxira me'yori, kun",
     'connect.normDaysAttribute': "Qo'shimcha maydon «Zaxira me'yori»",
     'connect.normDaysAttributeHint':
@@ -623,6 +633,11 @@ export const dict = {
     'connect.token': 'Bearer token',
     'connect.tokenHint': 'Get it: User profile → Service → Get access token',
     'connect.periodDays': 'Period, days',
+    'connect.period': 'Analysis period',
+    'connect.periodHint': 'Selected period: {days} days. Sales are taken from this range.',
+    'connect.from': 'From',
+    'connect.to': 'To',
+    'connect.rangeError': 'The "From" date must be on or before "To".',
     'connect.normDays': 'Stock norm, days',
     'connect.normDaysAttribute': 'Custom field «Stock norm»',
     'connect.normDaysAttributeHint':

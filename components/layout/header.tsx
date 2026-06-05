@@ -1,16 +1,15 @@
 'use client';
 
-import { Search, Calendar, ChevronDown, X } from 'lucide-react';
+import { Search, Calendar, X } from 'lucide-react';
 import { useT } from '@/lib/i18n/provider';
 import { LanguageSwitcher } from '@/components/language-switcher';
-
-const PERIOD_OPTIONS = [7, 14, 30, 60, 90, 180, 365];
 
 export function Header({
   title,
   subtitle,
   source,
-  periodDays,
+  fromDate,
+  toDate,
   onChangePeriod,
   userName,
   userRole,
@@ -20,16 +19,17 @@ export function Header({
   title: string;
   subtitle?: string;
   source: 'demo' | 'moysklad' | 'upload';
-  periodDays?: number;
-  onChangePeriod?: (d: number) => void;
+  fromDate?: string;
+  toDate?: string;
+  onChangePeriod?: (from: string, to: string) => void;
   userName?: string;
   userRole?: string;
   searchQuery?: string;
   onChangeSearch?: (v: string) => void;
 }) {
   const { t } = useT();
-  const periodLabel = periodDays ? `${periodDays} дн.` : t('app.period.30d');
-  const interactive = !!onChangePeriod && !!periodDays;
+  const today = toISODate(new Date());
+  const interactive = !!onChangePeriod && !!fromDate && !!toDate;
   const displayName = userName || 'Jamshid';
   const displayInitial = displayName.charAt(0).toUpperCase() || 'J';
   return (
@@ -79,36 +79,34 @@ export function Header({
             )}
           </div>
 
-          <div className="relative">
-            <button
-              type="button"
-              disabled={!interactive}
-              className={
-                'h-9 inline-flex items-center gap-2 px-3 rounded-lg bg-(--color-card) border border-(--color-border) text-[13px] font-medium ' +
-                (interactive
-                  ? 'hover:bg-(--color-muted) hover:border-(--color-primary)/40 cursor-pointer'
-                  : 'opacity-70 cursor-default')
-              }
-            >
+          {interactive ? (
+            <div className="inline-flex items-center gap-1.5 rounded-lg border border-(--color-border) bg-(--color-card) px-2 h-9">
               <Calendar size={15} className="text-(--color-muted-fg)" />
-              {periodLabel}
-              <ChevronDown size={14} className="text-(--color-muted-fg)" />
-            </button>
-            {interactive && (
-              <select
-                aria-label={t('app.period.30d')}
-                value={periodDays}
-                onChange={(e) => onChangePeriod!(Number(e.target.value))}
-                className="absolute inset-0 cursor-pointer opacity-0"
-              >
-                {PERIOD_OPTIONS.map((d) => (
-                  <option key={d} value={d}>
-                    {d} дн.
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+              <input
+                type="date"
+                value={fromDate}
+                max={toDate || today}
+                onChange={(e) => onChangePeriod!(e.target.value, toDate!)}
+                className="bg-transparent text-[12px] focus:outline-none"
+                aria-label={t('connect.from')}
+              />
+              <span className="text-(--color-muted-fg)">—</span>
+              <input
+                type="date"
+                value={toDate}
+                min={fromDate}
+                max={today}
+                onChange={(e) => onChangePeriod!(fromDate!, e.target.value)}
+                className="bg-transparent text-[12px] focus:outline-none"
+                aria-label={t('connect.to')}
+              />
+            </div>
+          ) : (
+            <div className="h-9 inline-flex items-center gap-2 px-3 rounded-lg bg-(--color-card) border border-(--color-border) text-[13px] font-medium opacity-70">
+              <Calendar size={15} className="text-(--color-muted-fg)" />
+              {t('app.period.30d')}
+            </div>
+          )}
 
           <LanguageSwitcher />
 
@@ -129,4 +127,9 @@ export function Header({
       </div>
     </div>
   );
+}
+
+function toISODate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
