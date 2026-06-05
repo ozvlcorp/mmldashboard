@@ -286,21 +286,41 @@ export type CurrencyRate = {
 };
 
 /**
- * Загружает ВСЕ валюты аккаунта одним запросом и строит:
- *  - base: валюта по умолчанию (isDefault) — это валюта, в которой считается
- *    вся аналитика (выручка отгрузок и т.п.);
- *  - byId: id → { символ, множитель к базовой } для конвертации цен из
- *    карточек товаров.
+ * Загружает ВСЕ валюты аккаунта + базовую валюту из companysettings,
+ * и строит:
+ *  - base: валюта по умолчанию (берётся из companysettings — это
+ *    единственный надёжный источник; флаг `default` в /entity/currency
+ *    у некоторых аккаунтов отсутствует или указывает не на ту);
+ *  - byId: id → { символ, множитель toBase } для конвертации цен из
+ *    карточек товаров в базовую.
  *
- * Курс МойСклад: для валюты задаётся rate за multiplicity единиц.
- * Множитель «1 ед. валюты → базовая» = rate / multiplicity, а при обратном
- * курсе (indirect) — multiplicity / rate. У базовой валюты он равен 1.
+ * Курс МойСклад: rate — это сколько единиц базовой валюты приходится
+ * на multiplicity единиц данной валюты. То есть в UI «1 USD = 12 020
+ * UZS» хранится как rate=12020, multiplicity=1, и формула toBase =
+ * rate/multiplicity всегда даёт правильный коэффициент. Флаг inverse/
+ * indirect в API не встречается стабильно — он управляет только
+ * представлением в UI, на хранимое значение rate не влияет.
  */
 export async function loadCurrencies(
   token: string,
 ): Promise<{ base: CurrencyInfo | null; byId: Map<string, CurrencyRate> }> {
   const byId = new Map<string, CurrencyRate>();
   let base: CurrencyInfo | null = null;
+
+  // Шаг 1: ID базовой валюты — из companysettings (источник истины).
+  let baseId: string | null = null;
+  try {
+    const settings = await fetchEntity<{ currency?: { meta?: { href?: string } } }>(
+      token,
+      '/context/companysettings',
+    );
+    const href = settings?.currency?.meta?.href;
+    if (href) baseId = extractUuid(href);
+  } catch {
+    /* fallback пойдёт через флаг default */
+  }
+
+  // Шаг 2: все валюты с курсами одним запросом.
   try {
     const page = await fetchPage<{
       id: string;
@@ -309,7 +329,6 @@ export async function loadCurrencies(
       isoCode?: string;
       rate?: number;
       multiplicity?: number;
-      indirect?: boolean;
       default?: boolean;
       isDefault?: boolean;
     }>(token, '/entity/currency?limit=1000');
@@ -322,22 +341,27 @@ export async function loadCurrencies(
         typeof row.multiplicity === 'number' && row.multiplicity > 0
           ? row.multiplicity
           : 1;
-      const toBase = row.indirect ? mult / rate : rate / mult;
-      byId.set(row.id, { id: row.id, symbol, toBase: toBase > 0 ? toBase : 1 });
+      // 1 ед. этой валюты = rate/multiplicity ед. базовой валюты аккаунта.
+      const toBase = rate / mult;
 
-      const isBase = row.default === true || row.isDefault === true;
+      const isBase =
+        (baseId && row.id === baseId) ||
+        row.default === true ||
+        row.isDefault === true;
+
       if (isBase) {
         base = {
           isoCode: iso,
           name: row.fullName || row.name || iso,
           symbol,
         };
-        // База переводится в саму себя 1:1, независимо от заданного курса
         byId.set(row.id, { id: row.id, symbol, toBase: 1 });
+      } else {
+        byId.set(row.id, { id: row.id, symbol, toBase: toBase > 0 ? toBase : 1 });
       }
     }
   } catch {
-    /* без валют сработают разумные дефолты в вызывающем коде */
+    /* без валют сработают разумные дефолты */
   }
   return { base, byId };
 }

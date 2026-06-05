@@ -118,6 +118,12 @@ function pickSalePrice(
     const match = prices.find((p) => p.priceType?.name === priceTypeName);
     if (match) return { value: match.value, currencyHref: match.currency?.meta?.href };
   }
+  // Берём первую НЕНУЛЕВУЮ цену — иначе пустой тип цены (например "Цена для
+  // сайта" с value=0 в другой валюте) перебивает реальную «Цена продажи».
+  const firstPositive = prices.find((p) => (p?.value ?? 0) > 0);
+  if (firstPositive) {
+    return { value: firstPositive.value, currencyHref: firstPositive.currency?.meta?.href };
+  }
   const first = prices[0];
   return { value: first?.value ?? 0, currencyHref: first?.currency?.meta?.href };
 }
