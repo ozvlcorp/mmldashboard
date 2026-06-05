@@ -177,9 +177,13 @@ export async function loadAnalytics(
     (n) => onProgress?.({ stage: 'demands', count: n }),
   );
 
-  // Все валюты аккаунта: базовая (для аналитики) + курсы для конвертации
-  // цен из карточек товаров в базовую валюту.
-  const { base: baseCurrency, byId: currencyById } = await loadCurrencies(token);
+  // Базовая валюта по мажоритарной валюте отгрузок (источник правды о
+  // валюте учёта) + курсы для конвертации цен из карточек.
+  const demandCurrencyId = pickMajorityCurrencyId(demands);
+  const { base: baseCurrency, byId: currencyById } = await loadCurrencies(
+    token,
+    demandCurrencyId,
+  );
 
   onProgress?.({ stage: 'compute' });
 
@@ -301,23 +305,46 @@ export type CurrencyRate = {
  * indirect в API не встречается стабильно — он управляет только
  * представлением в UI, на хранимое значение rate не влияет.
  */
+/** Возвращает id валюты, в которой выписано большинство отгрузок. */
+function pickMajorityCurrencyId(demands: MsDemand[]): string | null {
+  const counts = new Map<string, number>();
+  for (const d of demands) {
+    const id = extractUuid(d.rate?.currency?.meta?.href);
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestN = 0;
+  for (const [id, n] of counts) {
+    if (n > bestN) {
+      bestN = n;
+      best = id;
+    }
+  }
+  return best;
+}
+
 export async function loadCurrencies(
   token: string,
+  preferredBaseId: string | null = null,
 ): Promise<{ base: CurrencyInfo | null; byId: Map<string, CurrencyRate> }> {
   const byId = new Map<string, CurrencyRate>();
   let base: CurrencyInfo | null = null;
 
-  // Шаг 1: ID базовой валюты — из companysettings (источник истины).
-  let baseId: string | null = null;
-  try {
-    const settings = await fetchEntity<{ currency?: { meta?: { href?: string } } }>(
-      token,
-      '/context/companysettings',
-    );
-    const href = settings?.currency?.meta?.href;
-    if (href) baseId = extractUuid(href);
-  } catch {
-    /* fallback пойдёт через флаг default */
+  // Базовая валюта: 1) preferredBaseId (мажоритарная отгрузка — факт учёта)
+  //                 2) companysettings.currency
+  //                 3) default-флаг в /entity/currency
+  let baseId: string | null = preferredBaseId;
+  if (!baseId) {
+    try {
+      const settings = await fetchEntity<{ currency?: { meta?: { href?: string } } }>(
+        token,
+        '/context/companysettings',
+      );
+      const href = settings?.currency?.meta?.href;
+      if (href) baseId = extractUuid(href);
+    } catch {
+      /* fallback пойдёт через флаг default */
+    }
   }
 
   // Шаг 2: все валюты с курсами одним запросом.

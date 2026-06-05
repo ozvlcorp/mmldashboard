@@ -70,6 +70,8 @@ export type MsDemand = {
   sum: number;          // в копейках
   agent?: { meta: MsMeta; name?: string };
   positions?: { meta: MsMeta; rows?: MsDemandPosition[] };
+  /** Валюта документа — самый надёжный источник базовой валюты учёта. */
+  rate?: { currency?: { meta: MsMeta }; value?: number };
   meta: MsMeta;
 };
 
