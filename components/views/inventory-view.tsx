@@ -207,43 +207,40 @@ export function InventoryView({
     {
       key: 'prices',
       header: 'Цена',
-      help: `Цена продажи (вверху) и закупочная (внизу) — приведены к базовой валюте (${currency}) по курсу из МойСклад. Если в карточке валюта другая, под ценой мелким шрифтом показан оригинал. Маржа и наценка считаются уже после конвертации.`,
+      help: `Цена продажи (вверху) и закупочная (внизу) — показаны как в карточке товара в МойСклад. Если валюта карточки отличается от базовой валюты аккаунта (${currency}), под ценой указана конвертация по курсу из МойСклад. Маржа и наценка считаются уже после приведения к ${currency}, чтобы цифры были сопоставимыми.`,
       align: 'right',
-      width: 170,
+      width: 180,
       render: (r) => {
-        const saleConv = r.saleCurrency && r.saleCurrency !== currency;
-        const buyConv = r.buyCurrency && r.buyCurrency !== currency;
+        const saleCur = r.saleCurrency ?? currency;
+        const buyCur = r.buyCurrency ?? currency;
+        const saleOrig = r.salePriceOriginal ?? r.salePrice;
+        const costOrig = r.costPriceOriginal ?? r.costPrice;
+        const saleNeedsConv = saleCur !== currency;
+        const buyNeedsConv = buyCur !== currency;
         return (
           <div className="leading-tight">
-            <div className="font-bold text-[15px]">{fmt.money(r.salePrice, currency)}</div>
-            {saleConv && r.salePriceOriginal != null && (
+            <div className="font-bold text-[15px]">
+              {fmt.money(saleOrig, saleCur, saleNeedsConv ? 2 : 0)}
+            </div>
+            {saleNeedsConv && (
               <div className="text-[10.5px] text-(--color-muted-fg)/80">
-                ориг. {fmt.money(r.salePriceOriginal, r.saleCurrency, 2)}
+                ≈ {fmt.money(r.salePrice, currency)}
               </div>
             )}
             <div className="mt-0.5 text-[12px] text-(--color-muted-fg)">
-              закуп. {fmt.money(r.costPrice, currency)}
+              закуп. {fmt.money(costOrig, buyCur, buyNeedsConv ? 2 : 0)}
             </div>
-            {buyConv && r.costPriceOriginal != null && (
+            {buyNeedsConv && (
               <div className="text-[10.5px] text-(--color-muted-fg)/80">
-                ориг. {fmt.money(r.costPriceOriginal, r.buyCurrency, 2)}
+                ≈ {fmt.money(r.costPrice, currency)}
               </div>
             )}
           </div>
         );
       },
       sortAccessor: (r) => r.salePrice,
-      exportValue: (r) => Math.round(r.salePrice),
-      exportHeader: `Цена продажи, ${currency}`,
-    },
-    {
-      key: 'salePriceOrig',
-      header: 'Прод. ориг.',
-      hidden: true,
-      align: 'right',
-      render: () => null,
-      exportValue: (r) => (r.salePriceOriginal != null ? Math.round(r.salePriceOriginal) : ''),
-      exportHeader: 'Цена продажи (ориг.)',
+      exportValue: (r) => Math.round(r.salePriceOriginal ?? r.salePrice),
+      exportHeader: 'Цена продажи (карточка)',
     },
     {
       key: 'saleCurrency',
@@ -255,22 +252,22 @@ export function InventoryView({
       exportHeader: 'Валюта продажи',
     },
     {
-      key: 'cost',
-      header: 'Закуп.',
+      key: 'salePriceBase',
+      header: 'Прод. в базовой',
       hidden: true,
       align: 'right',
       render: () => null,
-      exportValue: (r) => Math.round(r.costPrice),
-      exportHeader: `Цена закупки, ${currency}`,
+      exportValue: (r) => Math.round(r.salePrice),
+      exportHeader: `Цена продажи в ${currency}`,
     },
     {
-      key: 'costPriceOrig',
-      header: 'Закуп. ориг.',
+      key: 'cost',
+      header: 'Закуп. (карточка)',
       hidden: true,
       align: 'right',
       render: () => null,
-      exportValue: (r) => (r.costPriceOriginal != null ? Math.round(r.costPriceOriginal) : ''),
-      exportHeader: 'Цена закупки (ориг.)',
+      exportValue: (r) => Math.round(r.costPriceOriginal ?? r.costPrice),
+      exportHeader: 'Цена закупки (карточка)',
     },
     {
       key: 'buyCurrency',
@@ -280,6 +277,15 @@ export function InventoryView({
       render: () => null,
       exportValue: (r) => r.buyCurrency ?? currency,
       exportHeader: 'Валюта закупки',
+    },
+    {
+      key: 'costPriceBase',
+      header: 'Закуп. в базовой',
+      hidden: true,
+      align: 'right',
+      render: () => null,
+      exportValue: (r) => Math.round(r.costPrice),
+      exportHeader: `Цена закупки в ${currency}`,
     },
     {
       key: 'margin',
