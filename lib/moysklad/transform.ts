@@ -24,6 +24,8 @@ export function assortmentToInventory(
     defaultNormDays?: number;
     priceTypeName?: string;
     normDaysAttribute?: string; // имя или ID кастомного атрибута
+    /** Карта currencyId → отображаемый символ (например "сум", "$"). */
+    currencyByHref?: Map<string, string>;
   } = { periodDays: 30 },
 ): InventoryInput[] {
   const fallbackNorm = opts.defaultNormDays ?? 10;
@@ -36,9 +38,17 @@ export function assortmentToInventory(
     }
   }
 
+  const lookupCurrency = (href: string | undefined): string | undefined => {
+    if (!href || !opts.currencyByHref) return undefined;
+    const id = extractAssortmentId(href);
+    if (!id) return undefined;
+    return opts.currencyByHref.get(id);
+  };
+
   return items.map((it) => {
     const cost = (it.buyPrice?.value ?? 0) / 100;
-    const sale = pickSalePrice(it, opts.priceTypeName) / 100;
+    const salePrice = pickSalePrice(it, opts.priceTypeName);
+    const sale = salePrice.value / 100;
     const sold = salesByProduct.get(it.id) ?? 0;
     const avgDaily = opts.periodDays > 0 ? sold / opts.periodDays : 0;
     const normDays = extractNormDays(it.attributes, opts.normDaysAttribute, fallbackNorm);
@@ -50,6 +60,8 @@ export function assortmentToInventory(
       salePrice: sale,
       avgDailySales: avgDaily,
       normDays,
+      buyCurrency: lookupCurrency(it.buyPrice?.currency?.href),
+      saleCurrency: lookupCurrency(salePrice.currencyHref),
     };
   });
 }
@@ -78,13 +90,17 @@ export function extractNormDays(
   return fallback;
 }
 
-function pickSalePrice(item: MsAssortmentItem, priceTypeName?: string): number {
+function pickSalePrice(
+  item: MsAssortmentItem,
+  priceTypeName?: string,
+): { value: number; currencyHref?: string } {
   const prices = item.salePrices ?? [];
   if (priceTypeName) {
     const match = prices.find((p) => p.priceType?.name === priceTypeName);
-    if (match) return match.value;
+    if (match) return { value: match.value, currencyHref: match.currency?.href };
   }
-  return prices[0]?.value ?? 0;
+  const first = prices[0];
+  return { value: first?.value ?? 0, currencyHref: first?.currency?.href };
 }
 
 function extractAssortmentId(href: string | undefined): string | null {

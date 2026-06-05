@@ -207,18 +207,31 @@ export function InventoryView({
     {
       key: 'prices',
       header: 'Цена',
-      help: 'Цена продажи (вверху) и закупочная цена (внизу). Разница между ними — валовая прибыль с одной штуки.',
+      help: 'Цена продажи (вверху) и закупочная цена (внизу). Валюта берётся из карточки товара в МойСклад — поэтому позиции в разных валютах показаны как есть, без конвертации.',
       align: 'right',
-      width: 130,
+      width: 160,
       render: (r) => (
         <div className="leading-tight">
-          <div className="font-bold text-[15px]">{fmt.money(r.salePrice)}</div>
-          <div className="text-[12px] text-(--color-muted-fg) mt-0.5">закуп. {fmt.money(r.costPrice)}</div>
+          <div className="font-bold text-[15px]">
+            {fmt.money(r.salePrice, r.saleCurrency ?? currency)}
+          </div>
+          <div className="mt-0.5 text-[12px] text-(--color-muted-fg)">
+            закуп. {fmt.money(r.costPrice, r.buyCurrency ?? currency)}
+          </div>
         </div>
       ),
       sortAccessor: (r) => r.salePrice,
       exportValue: (r) => Math.round(r.salePrice),
-      exportHeader: 'Цена продажи',
+      exportHeader: `Цена продажи, ${currency}`,
+    },
+    {
+      key: 'saleCurrency',
+      header: 'Вал. продажи',
+      hidden: true,
+      align: 'left',
+      render: () => null,
+      exportValue: (r) => r.saleCurrency ?? currency,
+      exportHeader: 'Валюта продажи',
     },
     {
       key: 'cost',
@@ -227,7 +240,16 @@ export function InventoryView({
       align: 'right',
       render: () => null,
       exportValue: (r) => Math.round(r.costPrice),
-      exportHeader: 'Цена закупки',
+      exportHeader: `Цена закупки, ${currency}`,
+    },
+    {
+      key: 'buyCurrency',
+      header: 'Вал. закупки',
+      hidden: true,
+      align: 'left',
+      render: () => null,
+      exportValue: (r) => r.buyCurrency ?? currency,
+      exportHeader: 'Валюта закупки',
     },
     {
       key: 'margin',

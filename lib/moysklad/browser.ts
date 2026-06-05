@@ -158,6 +158,10 @@ export async function loadAnalytics(
     (n) => onProgress?.({ stage: 'demands', count: n }),
   );
 
+  // Подтягиваем валюты, которые встречаются у товаров — нужны для отображения
+  // цены продажи и закупки в нативной валюте каждой карточки.
+  const currencyByHref = await fetchCurrenciesForAssortment(token, assortment);
+
   onProgress?.({ stage: 'compute' });
 
   const inventory = assortmentToInventory(assortment, demands, {
@@ -165,6 +169,7 @@ export async function loadAnalytics(
     defaultNormDays: params.normDays,
     priceTypeName: params.priceTypeName,
     normDaysAttribute: params.normDaysAttribute,
+    currencyByHref,
   });
   const abc = demandsToAbc(demands);
   const xyz = demandsToXyz(demands, {
@@ -251,6 +256,51 @@ async function fetchEntity<T>(token: string, path: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Собирает уникальные UUID валют из buyPrice + salePrices у ассортимента
+ * и одним батч-запросом получает их символы. Возвращает Map<uuid, symbol>,
+ * который потом подмешивается в InventoryInput.{buy,sale}Currency.
+ */
+async function fetchCurrenciesForAssortment(
+  token: string,
+  items: MsAssortmentItem[],
+): Promise<Map<string, string>> {
+  const ids = new Set<string>();
+  for (const it of items) {
+    const buyHref = it.buyPrice?.currency?.href;
+    if (buyHref) {
+      const id = extractUuid(buyHref);
+      if (id) ids.add(id);
+    }
+    for (const sp of it.salePrices ?? []) {
+      const href = sp.currency?.href;
+      if (!href) continue;
+      const id = extractUuid(href);
+      if (id) ids.add(id);
+    }
+  }
+  if (ids.size === 0) return new Map();
+
+  const filter = [...ids].map((id) => `id=${id}`).join(';');
+  const path = `/entity/currency?filter=${encodeURIComponent(filter)}&limit=${ids.size}`;
+  const map = new Map<string, string>();
+  try {
+    const page = await fetchPage<{
+      id: string;
+      name?: string;
+      isoCode?: string;
+    }>(token, path);
+    for (const row of page.rows) {
+      const iso = (row.isoCode ?? '').toUpperCase();
+      const symbol = CURRENCY_SYMBOLS[iso] ?? iso ?? row.name ?? '';
+      if (symbol) map.set(row.id, symbol);
+    }
+  } catch {
+    // не критично — без символов сработает fallback на глобальную валюту
+  }
+  return map;
 }
 
 /**

@@ -11,6 +11,10 @@ export type InventoryInput = {
   salePrice: number;      // E: цена продажи
   avgDailySales: number;  // F: средние продажи в день, шт
   normDays: number;       // G: норматив запаса, дней
+  /** Символ валюты закупочной цены (из карточки товара). */
+  buyCurrency?: string;
+  /** Символ валюты цены продажи (из карточки товара). */
+  saleCurrency?: string;
 };
 
 export type InventoryRow = InventoryInput & {
