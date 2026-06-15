@@ -19,6 +19,9 @@ import type { MsAssortmentItem, MsAttribute, MsDemand } from './types';
 /** Валюта с множителем к базовой: 1 ед. = toBase базовых (база = 1). */
 export type CurrencyRate = { id: string; symbol: string; toBase: number };
 
+/** Себестоимость единицы товара по ФИФО из отчёта прибыльности. */
+export type ProfitInfo = { costPerUnit: number; sellQuantity: number };
+
 export function assortmentToInventory(
   items: MsAssortmentItem[],
   demands: MsDemand[],
@@ -29,6 +32,8 @@ export function assortmentToInventory(
     normDaysAttribute?: string; // имя или ID кастомного атрибута
     /** Карта currencyId → { symbol, toBase } для конвертации в базовую валюту. */
     currencyById?: Map<string, CurrencyRate>;
+    /** ФИФО-себестоимость единицы по каждому товару (из /report/profit). */
+    profitByProduct?: Map<string, ProfitInfo>;
   } = { periodDays: 30 },
 ): InventoryInput[] {
   const fallbackNorm = opts.defaultNormDays ?? 10;
@@ -61,8 +66,13 @@ export function assortmentToInventory(
     // Конвертируем в базовую валюту аккаунта — только так маржа/наценка корректны
     const buyMul = buyRate?.toBase ?? 1;
     const saleMul = saleRate?.toBase ?? 1;
-    const cost = costOriginal * buyMul;
     const sale = saleOriginal * saleMul;
+    // СЕБЕСТОИМОСТЬ: приоритет — ФИФО из /report/profit/byproduct
+    // (реальная стоимость партий списания, а не «buyPrice в карточке»,
+    // которую часто не обновляют). Fallback — buyPrice × курс.
+    const fifo = opts.profitByProduct?.get(it.id);
+    const cost = fifo && fifo.costPerUnit > 0 ? fifo.costPerUnit : costOriginal * buyMul;
+    const costFromFifo = fifo != null && fifo.costPerUnit > 0;
     const converted = buyMul !== 1 || saleMul !== 1;
 
     const sold = salesByProduct.get(it.id) ?? 0;
@@ -81,6 +91,7 @@ export function assortmentToInventory(
       costPriceOriginal: costOriginal,
       salePriceOriginal: saleOriginal,
       converted,
+      costFromFifo,
     };
   });
 }

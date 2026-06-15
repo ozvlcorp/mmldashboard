@@ -207,16 +207,15 @@ export function InventoryView({
     {
       key: 'prices',
       header: 'Цена',
-      help: `Цена продажи (вверху) и закупочная (внизу) — показаны как в карточке товара в МойСклад. Если валюта карточки отличается от базовой валюты аккаунта (${currency}), под ценой указана конвертация по курсу из МойСклад. Маржа и наценка считаются уже после приведения к ${currency}, чтобы цифры были сопоставимыми.`,
+      help: `Цена продажи (вверху) и себестоимость (внизу). Себестоимость берётся из отчёта прибыльности МойСклад по методу ФИФО — реальная стоимость партий списания, а не цена в карточке. Если ФИФО недоступна (товар не продавался в периоде), используется закупочная цена из карточки.`,
       align: 'right',
       width: 180,
       render: (r) => {
         const saleCur = r.saleCurrency ?? currency;
-        const buyCur = r.buyCurrency ?? currency;
         const saleOrig = r.salePriceOriginal ?? r.salePrice;
-        const costOrig = r.costPriceOriginal ?? r.costPrice;
         const saleNeedsConv = saleCur !== currency;
-        const buyNeedsConv = buyCur !== currency;
+        const isFifo = r.costFromFifo === true;
+        const costLabel = isFifo ? 'себест.' : 'закуп.';
         return (
           <div className="leading-tight">
             <div className="font-bold text-[15px]">
@@ -227,14 +226,17 @@ export function InventoryView({
                 ≈ {fmt.money(r.salePrice, currency)}
               </div>
             )}
-            <div className="mt-0.5 text-[12px] text-(--color-muted-fg)">
-              закуп. {fmt.money(costOrig, buyCur, buyNeedsConv ? 2 : 0)}
+            <div
+              className="mt-0.5 text-[12px] text-(--color-muted-fg)"
+              title={isFifo ? 'ФИФО — фактическая себестоимость списания' : 'Из карточки товара (товар не продавался в периоде)'}
+            >
+              {costLabel} {fmt.money(r.costPrice, currency)}
+              {isFifo && (
+                <span className="ml-1 rounded bg-(--color-primary-soft) px-1 text-[10px] font-semibold text-(--color-primary-soft-fg)">
+                  ФИФО
+                </span>
+              )}
             </div>
-            {buyNeedsConv && (
-              <div className="text-[10.5px] text-(--color-muted-fg)/80">
-                ≈ {fmt.money(r.costPrice, currency)}
-              </div>
-            )}
           </div>
         );
       },

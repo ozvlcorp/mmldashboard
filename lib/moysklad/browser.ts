@@ -207,6 +207,10 @@ export async function loadAnalytics(
     demandCurrencyId,
   );
 
+  // Реальная себестоимость по ФИФО — из отчёта прибыльности за тот же
+  // период. Используем как costPrice вместо buyPrice карточки, если есть.
+  const profitByProduct = await loadProfitByProduct(token, from, until);
+
   // Сегменты RFM из статусов контрагентов МойСклад. Если у клиента в МойСклад
   // выставлен статус («Чемпионы», «Лояльные» и т.д.), он перезаписывает
   // автоматический сегмент. Подтягиваем карточки только тех контрагентов,
@@ -226,6 +230,7 @@ export async function loadAnalytics(
     priceTypeName: params.priceTypeName,
     normDaysAttribute: params.normDaysAttribute,
     currencyById,
+    profitByProduct,
   });
   const abc = demandsToAbc(demands);
   const xyz = demandsToXyz(demands, {
@@ -440,6 +445,61 @@ export async function loadCurrencies(
     /* без валют сработают разумные дефолты */
   }
   return { base, byId };
+}
+
+/** Реальная себестоимость единицы по ФИФО (из отчёта прибыльности). */
+export type ProfitPerProduct = {
+  /** Себестоимость единицы товара в БАЗОВОЙ валюте аккаунта. */
+  costPerUnit: number;
+  /** Сколько единиц этого товара продано за период. */
+  sellQuantity: number;
+  /** Выручка по товару за период (в базовой валюте). */
+  sellSum: number;
+  /** Прибыль = sellSum − sellCostSum (в базовой валюте). */
+  profit: number;
+};
+
+/**
+ * Отчёт «Прибыльность по товарам» — ФИФО-себестоимость продаж за период.
+ * Возвращает Map<assortmentId, ProfitPerProduct>. На фактическую
+ * себестоимость влияет реальная история закупок, а не цена в карточке.
+ * Используется для расчёта маржи и наценки в Inventory.
+ */
+export async function loadProfitByProduct(
+  token: string,
+  from: Date,
+  until: Date,
+): Promise<Map<string, ProfitPerProduct>> {
+  const result = new Map<string, ProfitPerProduct>();
+  const qp = new URLSearchParams({
+    momentFrom: msMoment(from),
+    momentTo: msMoment(until),
+  });
+  try {
+    const rows = await fetchAllParallel<{
+      assortment?: { meta?: { href?: string } };
+      sellSum?: number;
+      sellCostSum?: number;
+      sellQuantity?: number;
+      profit?: number;
+    }>(token, `/report/profit/byproduct?${qp.toString()}`, 1000, () => {});
+    for (const r of rows) {
+      const id = extractUuid(r.assortment?.meta?.href);
+      if (!id) continue;
+      const qty = r.sellQuantity ?? 0;
+      const costSum = (r.sellCostSum ?? 0) / 100;
+      if (qty <= 0) continue;
+      result.set(id, {
+        costPerUnit: costSum / qty,
+        sellQuantity: qty,
+        sellSum: (r.sellSum ?? 0) / 100,
+        profit: (r.profit ?? 0) / 100,
+      });
+    }
+  } catch {
+    /* отчёт может быть недоступен — fallback на buyPrice из карточки */
+  }
+  return result;
 }
 
 /**

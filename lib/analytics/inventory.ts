@@ -21,6 +21,8 @@ export type InventoryInput = {
   salePriceOriginal?: number;
   /** Сконвертирована ли хотя бы одна из цен (валюта ≠ базовой). */
   converted?: boolean;
+  /** Себестоимость взята из ФИФО-отчёта прибыльности (а не из карточки). */
+  costFromFifo?: boolean;
 };
 
 export type InventoryRow = InventoryInput & {
