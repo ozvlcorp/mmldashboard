@@ -194,19 +194,16 @@ export async function loadAnalytics(
     normDaysAttribute: params.normDaysAttribute,
     currencyById,
   });
-  const abc = demandsToAbc(demands, currencyById);
+  const abc = demandsToAbc(demands);
   const xyz = demandsToXyz(demands, {
     bucketDays: 7,
     periodsCount: 8,
     until,
   });
-  const rfm = demandsToRfm(demands, currencyById);
+  const rfm = demandsToRfm(demands);
 
-  // Turnover тоже приводим к базовой валюте (для KPI «Доход/день»).
-  const turnover = demands.reduce((s, d) => {
-    const r = currencyById ? demandToBase(d, currencyById) : 1;
-    return s + ((d.sum ?? 0) / 100) * r;
-  }, 0);
+  // d.sum хранится в базовой валюте — конвертация не нужна.
+  const turnover = demands.reduce((s, d) => s + (d.sum ?? 0), 0) / 100;
 
   return {
     inventory,
@@ -269,16 +266,6 @@ const UUID_RE = /([0-9a-f-]{36})(?:$|[/?])/i;
 function extractUuid(href: string | undefined): string | null {
   if (!href) return null;
   return UUID_RE.exec(href)?.[1] ?? null;
-}
-
-/** Курс валюты документа в базовую (1 если документ в базовой). */
-function demandToBase(d: MsDemand, currencyById: Map<string, CurrencyRate>): number {
-  const href = d.rate?.currency?.meta?.href;
-  if (!href) return 1;
-  const id = extractUuid(href);
-  if (!id) return 1;
-  const cur = currencyById.get(id);
-  return cur && cur.toBase > 0 ? cur.toBase : 1;
 }
 
 async function fetchEntity<T>(token: string, path: string): Promise<T | null> {

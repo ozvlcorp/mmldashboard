@@ -135,35 +135,18 @@ function extractAssortmentId(href: string | undefined): string | null {
 }
 
 /** Группирует отгрузки по позициям и возвращает выручку по каждому SKU */
-/** Курс документа в базовую валюту: 1 ед. валюты документа = N ед. базовой. */
-function demandToBaseRate(
-  d: MsDemand,
-  currencyById?: Map<string, CurrencyRate>,
-): number {
-  if (!currencyById) return 1;
-  const href = d.rate?.currency?.meta?.href;
-  if (!href) return 1;
-  const id = extractAssortmentId(href);
-  if (!id) return 1;
-  const cur = currencyById.get(id);
-  return cur && cur.toBase > 0 ? cur.toBase : 1;
-}
-
-export function demandsToAbc(
-  demands: MsDemand[],
-  currencyById?: Map<string, CurrencyRate>,
-): AbcInput[] {
+export function demandsToAbc(demands: MsDemand[]): AbcInput[] {
   const map = new Map<string, { name: string; value: number }>();
   for (const d of demands) {
-    const rate = demandToBaseRate(d, currencyById);
     for (const p of d.positions?.rows ?? []) {
       const id = extractAssortmentId(p.assortment?.meta?.href);
       if (!id) continue;
-      // Сумма позиции в валюте документа (с учётом скидки)
-      // → конвертируем в базовую валюту по курсу документа.
+      // MoySklad хранит position.price в базовой валюте аккаунта (отчёты
+      // «Сумма продаж» опираются именно на это значение), поэтому
+      // дополнительная конвертация не нужна и только искажает картину.
+      // Учитываем только скидку позиции (если задана в процентах).
       const discountFraction = Math.min(Math.max(p.discount ?? 0, 0), 100) / 100;
-      const positionSum = (p.price * p.quantity * (1 - discountFraction)) / 100;
-      const value = positionSum * rate;
+      const value = (p.price * p.quantity * (1 - discountFraction)) / 100;
       const prev = map.get(id);
       if (prev) {
         prev.value += value;
@@ -212,18 +195,15 @@ export function demandsToXyz(
   return [...map.entries()].map(([id, v]) => ({ id, name: v.name, periods: v.periods }));
 }
 
-/** Каждая отгрузка → одна RFM-транзакция (агент = клиент). Сумма
- * приводится к базовой валюте через курс документа. */
-export function demandsToRfm(
-  demands: MsDemand[],
-  currencyById?: Map<string, CurrencyRate>,
-): RfmTransaction[] {
+/** Каждая отгрузка → одна RFM-транзакция (агент = клиент). d.sum
+ * хранится в базовой валюте аккаунта МойСклад, конвертация не нужна. */
+export function demandsToRfm(demands: MsDemand[]): RfmTransaction[] {
   return demands
     .filter((d) => d.agent?.meta?.href)
     .map((d) => ({
       customerId: extractAssortmentId(d.agent!.meta.href) ?? d.agent!.meta.href,
       customerName: d.agent?.name,
       date: d.moment,
-      amount: (d.sum / 100) * demandToBaseRate(d, currencyById),
+      amount: d.sum / 100,
     }));
 }
