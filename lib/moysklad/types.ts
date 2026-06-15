@@ -77,6 +77,13 @@ export type MsDemand = {
   meta: MsMeta;
 };
 
+export type MsStore = {
+  id: string;
+  name: string;
+  archived?: boolean;
+  meta: MsMeta;
+};
+
 export type MsListResponse<T> = {
   context: unknown;
   meta: { size: number; limit: number; offset: number; nextHref?: string };

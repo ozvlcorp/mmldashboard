@@ -295,6 +295,17 @@ export function HomeClient() {
     void load(token, params);
   }
 
+  function changeStore(storeId: string) {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    // пустая строка = «все склады» → удаляем поле из params
+    const cur = readStoredParams();
+    const params: ConnectParams = storeId
+      ? { ...cur, storeId }
+      : { ...cur, storeId: undefined };
+    void load(token, params);
+  }
+
   const isLive = !!data;
   // Символ валюты — из самих данных (базовая валюта аккаунта МойСклад).
   const currencySymbol = data?.meta.currency || 'сум';
@@ -440,6 +451,9 @@ export function HomeClient() {
         fromDate={data?.meta.from?.slice(0, 10)}
         toDate={data?.meta.to?.slice(0, 10)}
         onChangePeriod={isLive ? changePeriod : undefined}
+        stores={data?.meta.stores ?? []}
+        storeId={data?.meta.storeId}
+        onChangeStore={isLive ? changeStore : undefined}
         userName={assignee?.name ?? null}
         searchQuery={searchQuery}
         onChangeSearch={setSearchQuery}

@@ -32,7 +32,27 @@ export type ConnectParams = {
   /** Явный диапазон дат (YYYY-MM-DD). Если задан — имеет приоритет над periodDays. */
   fromDate?: string;
   toDate?: string;
+  /** Фильтр по складу — id (UUID). Если не задан, аналитика по всем складам. */
+  storeId?: string;
 };
+
+export type StoreInfo = { id: string; name: string };
+
+/** Список активных складов аккаунта МойСклад. */
+export async function loadStores(token: string): Promise<StoreInfo[]> {
+  try {
+    const page = await fetchPage<{ id: string; name: string; archived?: boolean }>(
+      token,
+      '/entity/store?limit=1000',
+    );
+    return page.rows
+      .filter((s) => !s.archived)
+      .map((s) => ({ id: s.id, name: s.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  } catch {
+    return [];
+  }
+}
 
 /** Вычисляет окно [from, until] из params: явные даты в приоритете. */
 function resolveWindow(params: ConnectParams): { from: Date; until: Date; periodDays: number } {
@@ -63,6 +83,10 @@ export type AnalyticsResult = {
     turnover: number; // суммарная выручка за период в базовой валюте (demand.sum / 100)
     /** Символ базовой валюты аккаунта (например "сум"). Источник истины для UI. */
     currency?: string;
+    /** Все активные склады аккаунта — для переключателя в UI. */
+    stores?: StoreInfo[];
+    /** Текущий выбранный склад, если фильтр активен. */
+    storeId?: string;
   };
 };
 
@@ -157,10 +181,21 @@ export async function loadAnalytics(
 ): Promise<AnalyticsResult> {
   const { from, until, periodDays } = resolveWindow(params);
 
-  // Ассортимент — маленькие записи, можно тащить большими страницами
+  // Если выбран конкретный склад — добавляем фильтр во все запросы
+  // (ассортимент, продажи, отчёт прибыльности). storeHref нужен для
+  // составления фильтра — МойСклад требует href, не UUID.
+  const storeHref = params.storeId
+    ? `https://api.moysklad.ru/api/remap/1.2/entity/store/${params.storeId}`
+    : null;
+  const storeQS = storeHref ? `&store=${encodeURIComponent(storeHref)}` : '';
+  const storeFilterPart = storeHref ? `;store=${storeHref}` : '';
+
+  // Ассортимент — маленькие записи, можно тащить большими страницами.
+  // С stockStore.byStore=true приходят остатки по каждому складу, плюс при
+  // ?store=… остаток у item.stock уже отфильтрован под нужный склад.
   const assortment = await fetchAllParallel<MsAssortmentItem>(
     token,
-    '/entity/assortment?stockStore.byStore=true',
+    `/entity/assortment?stockStore.byStore=true${storeQS}`,
     500,
     (n) => onProgress?.({ stage: 'assortment', count: n }),
   );
@@ -171,7 +206,7 @@ export async function loadAnalytics(
   // Оба эндпоинта возвращают идентичную для нас структуру (positions,
   // sum, agent, rate.currency), поэтому дальше обрабатываются единообразно.
   const qp = new URLSearchParams({
-    filter: `moment>=${msMoment(from)};moment<=${msMoment(until)}`,
+    filter: `moment>=${msMoment(from)};moment<=${msMoment(until)}${storeFilterPart}`,
     expand: 'positions.assortment,agent,rate.currency',
     order: 'moment,asc',
   });
@@ -202,14 +237,14 @@ export async function loadAnalytics(
   // Базовая валюта по мажоритарной валюте отгрузок (источник правды о
   // валюте учёта) + курсы для конвертации цен из карточек.
   const demandCurrencyId = pickMajorityCurrencyId(demands);
-  const { base: baseCurrency, byId: currencyById } = await loadCurrencies(
-    token,
-    demandCurrencyId,
-  );
+  const [{ base: baseCurrency, byId: currencyById }, stores] = await Promise.all([
+    loadCurrencies(token, demandCurrencyId),
+    loadStores(token),
+  ]);
 
   // Реальная себестоимость по ФИФО — из отчёта прибыльности за тот же
   // период. Используем как costPrice вместо buyPrice карточки, если есть.
-  const profitByProduct = await loadProfitByProduct(token, from, until);
+  const profitByProduct = await loadProfitByProduct(token, from, until, params.storeId);
 
   // Сегменты RFM из статусов контрагентов МойСклад. Если у клиента в МойСклад
   // выставлен статус («Чемпионы», «Лояльные» и т.д.), он перезаписывает
@@ -261,6 +296,8 @@ export async function loadAnalytics(
       demandsCount: demands.length,
       turnover,
       currency: baseCurrency?.symbol,
+      stores,
+      storeId: params.storeId,
     },
   };
 }
@@ -469,12 +506,16 @@ export async function loadProfitByProduct(
   token: string,
   from: Date,
   until: Date,
+  storeId?: string,
 ): Promise<Map<string, ProfitPerProduct>> {
   const result = new Map<string, ProfitPerProduct>();
   const qp = new URLSearchParams({
     momentFrom: msMoment(from),
     momentTo: msMoment(until),
   });
+  if (storeId) {
+    qp.set('store', `https://api.moysklad.ru/api/remap/1.2/entity/store/${storeId}`);
+  }
   try {
     const rows = await fetchAllParallel<{
       assortment?: { meta?: { href?: string } };

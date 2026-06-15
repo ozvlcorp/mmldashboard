@@ -47,6 +47,9 @@ export function Dashboard({
   fromDate,
   toDate,
   onChangePeriod,
+  stores,
+  storeId,
+  onChangeStore,
   userName,
   searchQuery,
   onChangeSearch,
@@ -75,6 +78,9 @@ export function Dashboard({
   fromDate?: string;
   toDate?: string;
   onChangePeriod?: (from: string, to: string) => void;
+  stores?: { id: string; name: string }[];
+  storeId?: string;
+  onChangeStore?: (id: string) => void;
   userName?: string | null;
   searchQuery?: string;
   onChangeSearch?: (v: string) => void;
@@ -107,6 +113,9 @@ export function Dashboard({
           fromDate={fromDate}
           toDate={toDate}
           onChangePeriod={onChangePeriod}
+          stores={stores}
+          storeId={storeId}
+          onChangeStore={onChangeStore}
           userName={userName ?? undefined}
           searchQuery={searchQuery}
           onChangeSearch={onChangeSearch}

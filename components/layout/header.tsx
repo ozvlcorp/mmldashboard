@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, Calendar, X } from 'lucide-react';
+import { Search, Calendar, X, Warehouse } from 'lucide-react';
 import { useT } from '@/lib/i18n/provider';
 import { LanguageSwitcher } from '@/components/language-switcher';
 
@@ -11,6 +11,9 @@ export function Header({
   fromDate,
   toDate,
   onChangePeriod,
+  stores,
+  storeId,
+  onChangeStore,
   userName,
   userRole,
   searchQuery = '',
@@ -22,6 +25,9 @@ export function Header({
   fromDate?: string;
   toDate?: string;
   onChangePeriod?: (from: string, to: string) => void;
+  stores?: { id: string; name: string }[];
+  storeId?: string;
+  onChangeStore?: (id: string) => void;
   userName?: string;
   userRole?: string;
   searchQuery?: string;
@@ -106,6 +112,25 @@ export function Header({
               <Calendar size={15} className="text-(--color-muted-fg)" />
               {t('app.period.30d')}
             </div>
+          )}
+
+          {onChangeStore && stores && stores.length > 1 && (
+            <label className="inline-flex items-center gap-1.5 h-9 rounded-lg border border-(--color-border) bg-(--color-card) px-2 text-[12px]">
+              <Warehouse size={14} className="text-(--color-muted-fg)" />
+              <select
+                value={storeId ?? ''}
+                onChange={(e) => onChangeStore(e.target.value)}
+                aria-label="Склад"
+                className="bg-transparent text-[12px] focus:outline-none max-w-[180px]"
+              >
+                <option value="">Все склады</option>
+                {stores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
 
           <LanguageSwitcher />
