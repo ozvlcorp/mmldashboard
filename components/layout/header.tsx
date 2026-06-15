@@ -109,13 +109,7 @@ export function Header({
           </div>
 
           {interactive ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                applyPeriod();
-              }}
-              className="inline-flex items-center gap-1.5"
-            >
+            <div className="inline-flex items-center gap-1.5">
               <div
                 className={
                   'inline-flex items-center gap-1.5 rounded-lg border bg-(--color-card) px-2 h-9 ' +
@@ -130,6 +124,12 @@ export function Header({
                   value={pendingFrom}
                   max={pendingTo || today}
                   onChange={(e) => setPendingFrom(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      applyPeriod();
+                    }
+                  }}
                   className="bg-transparent text-[12px] focus:outline-none"
                   aria-label={t('connect.from')}
                 />
@@ -140,6 +140,12 @@ export function Header({
                   min={pendingFrom}
                   max={today}
                   onChange={(e) => setPendingTo(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      applyPeriod();
+                    }
+                  }}
                   className="bg-transparent text-[12px] focus:outline-none"
                   aria-label={t('connect.to')}
                 />
@@ -147,7 +153,8 @@ export function Header({
               {dirty && (
                 <>
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={applyPeriod}
                     disabled={!validRange}
                     title="Применить период"
                     className="inline-flex items-center gap-1 h-9 rounded-lg bg-(--color-primary) px-2.5 text-[12px] font-semibold text-(--color-primary-fg) shadow-[0_2px_8px_rgba(74,101,255,0.25)] hover:bg-(--color-primary-hover) disabled:opacity-50"
@@ -165,7 +172,7 @@ export function Header({
                   </button>
                 </>
               )}
-            </form>
+            </div>
           ) : (
             <div className="h-9 inline-flex items-center gap-2 px-3 rounded-lg bg-(--color-card) border border-(--color-border) text-[13px] font-medium opacity-70">
               <Calendar size={15} className="text-(--color-muted-fg)" />
