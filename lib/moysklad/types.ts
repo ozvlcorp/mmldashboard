@@ -90,6 +90,7 @@ export type MsCounterparty = {
   email?: string;
   legalTitle?: string;
   group?: { meta: MsMeta };
+  state?: { meta: MsMeta };
   meta: MsMeta;
 };
 

@@ -8,6 +8,7 @@ import {
   assortmentToInventory,
   demandsToAbc,
   demandsToRfm,
+  mapMsStatusToSegment,
   demandsToXyz,
 } from './transform';
 import type { InventoryInput } from '../analytics/inventory';
@@ -185,6 +186,17 @@ export async function loadAnalytics(
     demandCurrencyId,
   );
 
+  // Сегменты RFM из статусов контрагентов МойСклад. Если у клиента в МойСклад
+  // выставлен статус («Чемпионы», «Лояльные» и т.д.), он перезаписывает
+  // автоматический сегмент. Подтягиваем карточки только тех контрагентов,
+  // которые встретились в отгрузках за период.
+  const agentIds = new Set<string>();
+  for (const d of demands) {
+    const id = extractUuid(d.agent?.meta?.href);
+    if (id) agentIds.add(id);
+  }
+  const customerSegmentByAgentId = await loadCustomerSegments(token, [...agentIds]);
+
   onProgress?.({ stage: 'compute' });
 
   const inventory = assortmentToInventory(assortment, demands, {
@@ -200,7 +212,7 @@ export async function loadAnalytics(
     periodsCount: 8,
     until,
   });
-  const rfm = demandsToRfm(demands);
+  const rfm = demandsToRfm(demands, customerSegmentByAgentId);
 
   // d.sum хранится в базовой валюте — конвертация не нужна.
   const turnover = demands.reduce((s, d) => s + (d.sum ?? 0), 0) / 100;
@@ -592,6 +604,67 @@ export async function loadDebtors(
     .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 
   return { rows, groups };
+}
+
+/**
+ * Подтягивает агентов (контрагентов) из переданных id и для тех, у кого
+ * выставлен state в МойСклад, возвращает Map<agentId, RfmSegment> по
+ * маппингу русских названий статусов. Карточки без статуса — пропускаются
+ * (для них останется автоматический RFM-сегмент).
+ */
+async function loadCustomerSegments(
+  token: string,
+  agentIds: string[],
+): Promise<Map<string, import('../analytics/rfm').RfmSegment>> {
+  const out = new Map<string, import('../analytics/rfm').RfmSegment>();
+  if (agentIds.length === 0) return out;
+
+  // 1. Словарь состояний counterparty (id → name) — один запрос.
+  let stateNameById = new Map<string, string>();
+  try {
+    const metadata = await fetchEntity<{ states?: Array<{ id: string; name: string }> }>(
+      token,
+      '/entity/counterparty/metadata',
+    );
+    for (const st of metadata?.states ?? []) {
+      stateNameById.set(st.id, st.name);
+    }
+  } catch {
+    /* без названий статусов мы всё равно не сможем мапить — выходим */
+  }
+  if (stateNameById.size === 0) return out;
+
+  // 2. Карточки контрагентов батчами (state приходит как ссылка с meta.href).
+  const BATCH = 50;
+  const batches: string[][] = [];
+  for (let i = 0; i < agentIds.length; i += BATCH) {
+    batches.push(agentIds.slice(i, i + BATCH));
+  }
+  try {
+    let nextIdx = 0;
+    const concurrency = Math.min(5, batches.length);
+    const workers = Array.from({ length: concurrency }, async () => {
+      while (true) {
+        const idx = nextIdx++;
+        if (idx >= batches.length) break;
+        const chunk = batches[idx];
+        const filter = chunk.map((id) => `id=${id}`).join(';');
+        const path = `/entity/counterparty?filter=${encodeURIComponent(filter)}&limit=${chunk.length}`;
+        const page = await fetchPage<MsCounterparty>(token, path);
+        for (const cp of page.rows) {
+          const stateId = extractUuid(cp.state?.meta?.href);
+          if (!stateId) continue;
+          const statusName = stateNameById.get(stateId);
+          const seg = mapMsStatusToSegment(statusName);
+          if (seg) out.set(cp.id, seg);
+        }
+      }
+    });
+    await Promise.all(workers);
+  } catch {
+    /* не критично */
+  }
+  return out;
 }
 
 async function fetchGroupsBatch(

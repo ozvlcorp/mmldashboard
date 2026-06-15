@@ -13,6 +13,9 @@ export type RfmTransaction = {
   customerName?: string;
   date: string | Date;
   amount: number;
+  /** Жёсткий сегмент клиента (из статуса контрагента в МойСклад).
+   * Если задан — перезапишет автоматический RFM-сегмент. */
+  customerSegment?: RfmSegment;
 };
 
 export type RfmCustomer = {
@@ -135,7 +138,18 @@ export function buildRfmReport(
 ): RfmScored[] {
   const refDate = opts.referenceDate ?? new Date();
   const customers = aggregateTransactions(txs, refDate);
-  return scoreCustomers(customers).sort((a, b) => b.monetary - a.monetary);
+  // Снимаем «жёсткие» сегменты (из статусов МойСклад) — берём последний по
+  // клиенту, если транзакций несколько.
+  const hardSegment = new Map<string, RfmSegment>();
+  for (const t of txs) {
+    if (t.customerSegment) hardSegment.set(t.customerId, t.customerSegment);
+  }
+  return scoreCustomers(customers)
+    .map((s) => {
+      const override = hardSegment.get(s.id);
+      return override ? { ...s, segment: override } : s;
+    })
+    .sort((a, b) => b.monetary - a.monetary);
 }
 
 export function summarizeRfm(scored: RfmScored[]) {

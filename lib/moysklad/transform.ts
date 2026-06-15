@@ -5,7 +5,7 @@
 import type { InventoryInput } from '../analytics/inventory';
 import type { AbcInput } from '../analytics/abc';
 import type { XyzInput } from '../analytics/xyz';
-import type { RfmTransaction } from '../analytics/rfm';
+import type { RfmSegment, RfmTransaction } from '../analytics/rfm';
 import type { MsAssortmentItem, MsAttribute, MsDemand } from './types';
 
 /**
@@ -195,15 +195,49 @@ export function demandsToXyz(
   return [...map.entries()].map(([id, v]) => ({ id, name: v.name, periods: v.periods }));
 }
 
+/**
+ * Маппинг названий статусов контрагентов МойСклад → внутренний RfmSegment.
+ * Регистронезависимо, с учётом сокращений (например «Потенц. лояльные»).
+ */
+const MS_STATUS_TO_SEGMENT: Array<[RegExp, RfmSegment]> = [
+  [/^чемпион/i, 'Champions'],
+  [/^потерян/i, 'Lost'],
+  [/^спящ/i, 'Hibernating'],
+  [/^в\s*зоне\s*риска|^риск/i, 'At Risk'],
+  [/^требу/i, 'Need Attention'],
+  [/^перспектив/i, 'Promising'],
+  [/^новые|^new/i, 'New'],
+  [/^потенц/i, 'Potential Loyal'],
+  [/^лояльн/i, 'Loyal'],
+];
+
+export function mapMsStatusToSegment(name: string | undefined): RfmSegment | undefined {
+  if (!name) return undefined;
+  const n = name.trim();
+  for (const [re, seg] of MS_STATUS_TO_SEGMENT) {
+    if (re.test(n)) return seg;
+  }
+  return undefined;
+}
+
 /** Каждая отгрузка → одна RFM-транзакция (агент = клиент). d.sum
- * хранится в базовой валюте аккаунта МойСклад, конвертация не нужна. */
-export function demandsToRfm(demands: MsDemand[]): RfmTransaction[] {
+ * хранится в базовой валюте аккаунта МойСклад, конвертация не нужна.
+ * customerSegmentByAgentId — жёсткое назначение сегмента по статусу
+ * контрагента из МойСклад (override автоматики). */
+export function demandsToRfm(
+  demands: MsDemand[],
+  customerSegmentByAgentId?: Map<string, RfmSegment>,
+): RfmTransaction[] {
   return demands
     .filter((d) => d.agent?.meta?.href)
-    .map((d) => ({
-      customerId: extractAssortmentId(d.agent!.meta.href) ?? d.agent!.meta.href,
-      customerName: d.agent?.name,
-      date: d.moment,
-      amount: d.sum / 100,
-    }));
+    .map((d) => {
+      const agentId = extractAssortmentId(d.agent!.meta.href) ?? d.agent!.meta.href;
+      return {
+        customerId: agentId,
+        customerName: d.agent?.name,
+        date: d.moment,
+        amount: d.sum / 100,
+        customerSegment: customerSegmentByAgentId?.get(agentId),
+      };
+    });
 }
