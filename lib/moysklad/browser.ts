@@ -168,7 +168,7 @@ export async function loadAnalytics(
   // Отгрузки с expand жирнее — берём меньшими страницами
   const qp = new URLSearchParams({
     filter: `moment>=${msMoment(from)};moment<=${msMoment(until)}`,
-    expand: 'positions.assortment,agent',
+    expand: 'positions.assortment,agent,rate.currency',
     order: 'moment,asc',
   });
   const demands = await fetchAllParallel<MsDemand>(
