@@ -18,6 +18,7 @@ import {
   type AnalyticsResult,
   type ComparisonResult,
   type ConnectParams,
+  type CounterpartyGroup,
   type CurrencyInfo,
   type DebtorsProgress,
   type LoadProgress,
@@ -124,6 +125,7 @@ export function HomeClient() {
   const [progress, setProgress] = React.useState<LoadProgress | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [debtors, setDebtors] = React.useState<DebtCandidate[] | null>(null);
+  const [debtorGroups, setDebtorGroups] = React.useState<CounterpartyGroup[]>([]);
   const [debtorsScanning, setDebtorsScanning] = React.useState(false);
   const [debtorsProgress, setDebtorsProgress] = React.useState<DebtorsProgress | null>(null);
   const [debtorsError, setDebtorsError] = React.useState<string | null>(null);
@@ -154,8 +156,9 @@ export function HomeClient() {
     setDebtorsError(null);
     setDebtorsProgress(null);
     try {
-      const list = await loadDebtors(token, (e) => setDebtorsProgress(e));
-      setDebtors(list);
+      const { rows, groups } = await loadDebtors(token, (e) => setDebtorsProgress(e));
+      setDebtors(rows);
+      setDebtorGroups(groups);
     } catch (e) {
       setDebtorsError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -193,9 +196,10 @@ export function HomeClient() {
         setDebtorsScanning(true);
         setDebtorsError(null);
         loadDebtors(token, (e) => setDebtorsProgress(e))
-          .then((list) => {
-            setDebtors(list);
-            writeCache(result, list, null);
+          .then(({ rows, groups }) => {
+            setDebtors(rows);
+            setDebtorGroups(groups);
+            writeCache(result, rows, null);
           })
           .catch((e) =>
             setDebtorsError(e instanceof Error ? e.message : String(e)),
@@ -260,6 +264,7 @@ export function HomeClient() {
     setData(null);
     setError(null);
     setDebtors(null);
+    setDebtorGroups([]);
     setDebtorsError(null);
     setAssignee(null);
     setCacheTime(null);
@@ -422,6 +427,7 @@ export function HomeClient() {
         xyz={xyz}
         rfm={rfm}
         debtors={dashDebtors}
+        debtorGroups={isLive ? debtorGroups : []}
         source={isLive ? 'moysklad' : 'demo'}
         currency={currencySymbol}
         horizonDays={10}

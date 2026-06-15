@@ -37,6 +37,7 @@ export function Dashboard({
   source,
   currency = 'сум',
   horizonDays = 10,
+  debtorGroups,
   onScanDebtors,
   debtorsScanning,
   debtorsProgress,
@@ -61,6 +62,7 @@ export function Dashboard({
   xyz: XyzInput[];
   rfm: RfmTransaction[];
   debtors: DebtCandidate[];
+  debtorGroups?: { id: string; name: string }[];
   source: 'demo' | 'moysklad' | 'upload';
   currency?: string;
   horizonDays?: number;
@@ -125,6 +127,7 @@ export function Dashboard({
             {active === 'debts' && (
               <DebtsView
                 initialDebtors={debtors}
+                groups={debtorGroups}
                 currency={currency}
                 onScan={onScanDebtors}
                 scanning={debtorsScanning}

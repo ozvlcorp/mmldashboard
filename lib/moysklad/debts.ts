@@ -16,8 +16,13 @@ export type DebtCandidate = {
   counterpartyId: string;
   counterpartyName: string;
   counterpartyPhone?: string;
-  balance: number;              // отрицательный = долг
-  debtAmount: number;           // положительное число = модуль долга
+  balance: number;              // в базовой валюте: <0 = клиент должен нам (должник), >0 = мы должны клиенту (кредитор)
+  debtAmount: number;           // модуль баланса (всегда ≥ 0)
+  /** Тип задолженности по знаку баланса. */
+  kind?: 'debtor' | 'creditor';
+  /** Группа контрагента (название) — для фильтра. */
+  groupId?: string;
+  groupName?: string;
 };
 
 export type TelegramLinkParams = {

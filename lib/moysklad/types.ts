@@ -59,6 +59,8 @@ export type MsDemandPosition = {
   id: string;
   quantity: number;
   price: number;
+  /** Скидка по позиции в процентах (0–100). */
+  discount?: number;
   assortment: { meta: MsMeta; name?: string };
   meta: MsMeta;
 };
@@ -87,6 +89,7 @@ export type MsCounterparty = {
   phone?: string;
   email?: string;
   legalTitle?: string;
+  group?: { meta: MsMeta };
   meta: MsMeta;
 };
 

@@ -194,15 +194,19 @@ export async function loadAnalytics(
     normDaysAttribute: params.normDaysAttribute,
     currencyById,
   });
-  const abc = demandsToAbc(demands);
+  const abc = demandsToAbc(demands, currencyById);
   const xyz = demandsToXyz(demands, {
     bucketDays: 7,
     periodsCount: 8,
     until,
   });
-  const rfm = demandsToRfm(demands);
+  const rfm = demandsToRfm(demands, currencyById);
 
-  const turnover = demands.reduce((s, d) => s + (d.sum ?? 0), 0) / 100;
+  // Turnover тоже приводим к базовой валюте (для KPI «Доход/день»).
+  const turnover = demands.reduce((s, d) => {
+    const r = currencyById ? demandToBase(d, currencyById) : 1;
+    return s + ((d.sum ?? 0) / 100) * r;
+  }, 0);
 
   return {
     inventory,
@@ -265,6 +269,16 @@ const UUID_RE = /([0-9a-f-]{36})(?:$|[/?])/i;
 function extractUuid(href: string | undefined): string | null {
   if (!href) return null;
   return UUID_RE.exec(href)?.[1] ?? null;
+}
+
+/** Курс валюты документа в базовую (1 если документ в базовой). */
+function demandToBase(d: MsDemand, currencyById: Map<string, CurrencyRate>): number {
+  const href = d.rate?.currency?.meta?.href;
+  if (!href) return 1;
+  const id = extractUuid(href);
+  if (!id) return 1;
+  const cur = currencyById.get(id);
+  return cur && cur.toBase > 0 ? cur.toBase : 1;
 }
 
 async function fetchEntity<T>(token: string, path: string): Promise<T | null> {
@@ -525,24 +539,29 @@ async function fetchCounterpartiesBatch(
   return map;
 }
 
+export type CounterpartyGroup = { id: string; name: string };
+
 /**
- * Все контрагенты с отрицательным балансом. Не зависит от кастомных
- * атрибутов МойСклад — работает на любом аккаунте сразу.
+ * Контрагенты с ненулевым балансом — должники (нам должны) и кредиторы
+ * (мы должны). Не зависит от кастомных атрибутов МойСклад.
+ *
+ * Знак баланса в /report/counterparty: <0 — клиент должен нам, >0 — мы
+ * должны клиенту (по бухгалтерскому соглашению МойСклад).
  */
 export async function loadDebtors(
   token: string,
   onProgress?: (e: DebtorsProgress) => void,
-): Promise<DebtCandidate[]> {
+): Promise<{ rows: DebtCandidate[]; groups: CounterpartyGroup[] }> {
   const reports = await fetchAllParallel<MsCounterpartyReport>(
     token,
     '/report/counterparty',
     500,
     (n) => onProgress?.({ stage: 'reports', count: n }),
   );
-  const debtors = reports.filter((r) => r.balance < 0);
-  if (debtors.length === 0) return [];
+  const nonZero = reports.filter((r) => r.balance !== 0);
+  if (nonZero.length === 0) return { rows: [], groups: [] };
 
-  const ids = debtors
+  const ids = nonZero
     .map((r) => extractUuid(r.counterparty?.meta?.href))
     .filter((id): id is string => !!id);
 
@@ -550,9 +569,20 @@ export async function loadDebtors(
     onProgress?.({ stage: 'cards', done, total }),
   );
 
-  const out: DebtCandidate[] = debtors.map((r) => {
+  // Соберём все встречающиеся группы и подтянем их названия отдельным батчем —
+  // в /entity/counterparty group выглядит как { meta: href } без name.
+  const groupIds = new Set<string>();
+  for (const cp of cards.values()) {
+    const gid = extractUuid(cp.group?.meta?.href);
+    if (gid) groupIds.add(gid);
+  }
+  const groupNames = await fetchGroupsBatch(token, [...groupIds]);
+
+  const rows: DebtCandidate[] = nonZero.map((r) => {
     const cpId = extractUuid(r.counterparty?.meta?.href) ?? '';
     const cp = cards.get(cpId);
+    const gid = extractUuid(cp?.group?.meta?.href) ?? undefined;
+    const balance = r.balance / 100;
     return {
       demandId: cpId,
       demandName: r.demandsCount ? `${r.demandsCount} отгрузок` : '—',
@@ -561,9 +591,42 @@ export async function loadDebtors(
       counterpartyId: cpId,
       counterpartyName: cp?.name ?? `Контрагент ${cpId.slice(0, 8)}`,
       counterpartyPhone: cp?.phone,
-      balance: r.balance / 100,
-      debtAmount: Math.abs(r.balance) / 100,
+      balance,
+      debtAmount: Math.abs(balance),
+      kind: balance < 0 ? 'debtor' : 'creditor',
+      groupId: gid,
+      groupName: gid ? groupNames.get(gid) : undefined,
     };
   });
-  return out.sort((a, b) => b.debtAmount - a.debtAmount);
+  rows.sort((a, b) => b.debtAmount - a.debtAmount);
+
+  const groups: CounterpartyGroup[] = [...groupIds]
+    .map((id) => ({ id, name: groupNames.get(id) ?? id.slice(0, 8) }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+  return { rows, groups };
+}
+
+async function fetchGroupsBatch(
+  token: string,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (ids.length === 0) return map;
+  const BATCH = 50;
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += BATCH) chunks.push(ids.slice(i, i + BATCH));
+  try {
+    for (const chunk of chunks) {
+      const filter = chunk.map((id) => `id=${id}`).join(';');
+      const page = await fetchPage<{ id: string; name: string }>(
+        token,
+        `/entity/group?filter=${encodeURIComponent(filter)}&limit=${chunk.length}`,
+      );
+      for (const g of page.rows) map.set(g.id, g.name);
+    }
+  } catch {
+    /* не критично — группы покажутся как id */
+  }
+  return map;
 }
