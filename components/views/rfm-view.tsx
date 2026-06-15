@@ -139,13 +139,49 @@ export function RfmView({
     {
       key: 'm',
       header: 'M, выручка',
-      help: 'Monetary — суммарная выручка от клиента за всё время.',
+      help: `Monetary — суммы покупок по каждой валюте документа. Сортировка по приведённой в базовую валюту (${currency}).`,
       align: 'right',
-      width: 160,
-      render: (r) => <span className="font-bold text-[15px]">{fmt.money(r.monetary)}</span>,
+      width: 200,
+      render: (r) => {
+        const entries = Object.entries(r.amountByCurrency ?? {}).filter(([, v]) => v > 0);
+        if (entries.length === 0) {
+          return <span className="font-bold text-[15px]">{fmt.money(r.monetary, currency)}</span>;
+        }
+        // Сортируем валюты так: базовая первой, потом по убыванию суммы.
+        entries.sort((a, b) => {
+          if (a[0] === currency) return -1;
+          if (b[0] === currency) return 1;
+          return b[1] - a[1];
+        });
+        const primary = entries[0];
+        const others = entries.slice(1);
+        return (
+          <div className="leading-tight">
+            <div className="font-bold text-[15px]">{fmt.money(primary[1], primary[0])}</div>
+            {others.map(([sym, val]) => (
+              <div key={sym} className="text-[11px] text-(--color-muted-fg) mt-0.5">
+                {fmt.money(val, sym, sym === currency ? 0 : 2)}
+              </div>
+            ))}
+          </div>
+        );
+      },
       sortAccessor: (r) => r.monetary,
       exportValue: (r) => Math.round(r.monetary),
-      exportHeader: 'Выручка, сум',
+      exportHeader: `Выручка (в базовой), ${currency}`,
+    },
+    {
+      key: 'm-byCurrency',
+      header: 'Выручка по валютам',
+      hidden: true,
+      align: 'right',
+      render: () => null,
+      exportValue: (r) =>
+        Object.entries(r.amountByCurrency ?? {})
+          .filter(([, v]) => v > 0)
+          .map(([sym, val]) => `${Math.round(val)} ${sym}`)
+          .join('; '),
+      exportHeader: 'Суммы по валютам документа',
     },
   ];
 

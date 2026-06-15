@@ -13,6 +13,10 @@ export type RfmTransaction = {
   customerName?: string;
   date: string | Date;
   amount: number;
+  /** Символ валюты, в которой совершена транзакция (как в карточке документа). */
+  currency?: string;
+  /** Сумма транзакции, приведённая к базовой валюте аккаунта — для расчёта M-score. */
+  amountBase?: number;
   /** Жёсткий сегмент клиента (из статуса контрагента в МойСклад).
    * Если задан — перезапишет автоматический RFM-сегмент. */
   customerSegment?: RfmSegment;
@@ -23,7 +27,9 @@ export type RfmCustomer = {
   name: string;
   recencyDays: number;  // дни с последней покупки
   frequency: number;    // число покупок
-  monetary: number;     // суммарная выручка
+  monetary: number;     // суммарная выручка в БАЗОВОЙ валюте — для сортировки/квинтилей
+  /** Суммы покупок по каждой валюте документа (символ → сумма). */
+  amountByCurrency: Record<string, number>;
 };
 
 export type RfmScored = RfmCustomer & {
@@ -60,6 +66,10 @@ export function aggregateTransactions(
     if (!Number.isFinite(d.getTime())) continue;
     const ageMs = refDate.getTime() - d.getTime();
     const ageDays = Math.max(0, Math.floor(ageMs / (1000 * 60 * 60 * 24)));
+    // monetary в БАЗОВОЙ валюте — для сортировки/квинтилей.
+    // amountByCurrency — сырые суммы по валюте документа, для UI.
+    const inBase = t.amountBase ?? t.amount;
+    const curSym = t.currency ?? '';
     const prev = map.get(id);
     if (!prev) {
       map.set(id, {
@@ -67,12 +77,14 @@ export function aggregateTransactions(
         name: t.customerName ?? id,
         recencyDays: ageDays,
         frequency: 1,
-        monetary: t.amount,
+        monetary: inBase,
+        amountByCurrency: curSym ? { [curSym]: t.amount } : {},
       });
     } else {
       prev.recencyDays = Math.min(prev.recencyDays, ageDays);
       prev.frequency += 1;
-      prev.monetary += t.amount;
+      prev.monetary += inBase;
+      if (curSym) prev.amountByCurrency[curSym] = (prev.amountByCurrency[curSym] ?? 0) + t.amount;
       if (t.customerName) prev.name = t.customerName;
     }
   }

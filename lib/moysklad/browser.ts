@@ -212,7 +212,12 @@ export async function loadAnalytics(
     periodsCount: 8,
     until,
   });
-  const rfm = demandsToRfm(demands, customerSegmentByAgentId);
+  const rfm = demandsToRfm(
+    demands,
+    customerSegmentByAgentId,
+    currencyById,
+    baseCurrency?.symbol,
+  );
 
   // d.sum хранится в базовой валюте — конвертация не нужна.
   const turnover = demands.reduce((s, d) => s + (d.sum ?? 0), 0) / 100;

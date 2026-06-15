@@ -220,23 +220,41 @@ export function mapMsStatusToSegment(name: string | undefined): RfmSegment | und
   return undefined;
 }
 
-/** Каждая отгрузка → одна RFM-транзакция (агент = клиент). d.sum
- * хранится в базовой валюте аккаунта МойСклад, конвертация не нужна.
+/** Курс валюты к базовой (без поиска по карте). */
+type CurrencyMap = Map<string, { symbol: string; toBase: number }>;
+
+/** Каждая отгрузка → одна RFM-транзакция (агент = клиент).
+ *
+ * d.sum хранится в **валюте документа** (отгрузка в долларах = сумма в $).
+ * Возвращаем сырую сумму + символ валюты + сконвертированную в базовую
+ * сумму (для расчёта M-score и сортировки).
  * customerSegmentByAgentId — жёсткое назначение сегмента по статусу
- * контрагента из МойСклад (override автоматики). */
+ * контрагента из МойСклад (override автоматики).
+ */
 export function demandsToRfm(
   demands: MsDemand[],
   customerSegmentByAgentId?: Map<string, RfmSegment>,
+  currencyById?: CurrencyMap,
+  baseSymbol?: string,
 ): RfmTransaction[] {
   return demands
     .filter((d) => d.agent?.meta?.href)
     .map((d) => {
       const agentId = extractAssortmentId(d.agent!.meta.href) ?? d.agent!.meta.href;
+      const amount = d.sum / 100;
+      // Валюта документа: пробуем currencyById; если документ в базовой —
+      // получим её же; если currency.meta отсутствует — fallback на base.
+      const curId = extractAssortmentId(d.rate?.currency?.meta?.href) ?? '';
+      const cur = currencyById?.get(curId);
+      const symbol = cur?.symbol ?? baseSymbol ?? '';
+      const toBase = cur?.toBase ?? 1;
       return {
         customerId: agentId,
         customerName: d.agent?.name,
         date: d.moment,
-        amount: d.sum / 100,
+        amount,
+        currency: symbol,
+        amountBase: amount * toBase,
         customerSegment: customerSegmentByAgentId?.get(agentId),
       };
     });
