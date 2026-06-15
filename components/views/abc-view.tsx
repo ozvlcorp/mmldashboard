@@ -49,10 +49,16 @@ export function AbcView({
   const pctOfTotal = (count: number) =>
     rows.length > 0 ? (count / rows.length) * 100 : 0;
 
+  // Перевёрнутая накопленная доля: «доля выручки от этой позиции и далее».
+  // Первый товар (топ) = 100%, последний = только его собственная доля.
+  // Соответствует ожиданию пользователя: кривая Парето идёт сверху вниз,
+  // визуально показывая концентрацию выручки в верхних позициях.
+  const tailShare = (r: AbcRow) => 1 - r.cumShare + r.share;
+
   const chartData = rows.map((r) => ({
     name: r.name.length > 14 ? r.name.slice(0, 13) + '…' : r.name,
     value: r.value,
-    cumShare: r.cumShare * 100,
+    cumShare: tailShare(r) * 100,
     class: r.class,
   }));
 
@@ -114,24 +120,27 @@ export function AbcView({
     {
       key: 'cumShare',
       header: t('col.cumShare'),
-      help: 'Накопленная доля — сумма долей всех товаров до этого (включая текущий). Когда переходит за 80% — товары становятся классом B; за 95% — классом C.',
+      help: 'Доля выручки, которую обеспечивает этот товар и все стоящие ниже в рейтинге. У #1 (самый прибыльный) она ≈ 100%, у последнего — только его собственная доля. Так Парето-кривая идёт сверху-вниз и сразу видно концентрацию.',
       align: 'right',
       width: 210,
       minWidth: 180,
-      render: (r) => (
-        <div className="inline-flex items-center gap-2 justify-end w-full">
-          <div className="w-16 h-1.5 rounded-full bg-(--color-muted) overflow-hidden">
-            <div
-              className="h-full bg-(--color-primary)"
-              style={{ width: `${Math.min(100, r.cumShare * 100)}%` }}
-            />
+      render: (r) => {
+        const tail = tailShare(r);
+        return (
+          <div className="inline-flex items-center gap-2 justify-end w-full">
+            <div className="w-16 h-1.5 rounded-full bg-(--color-muted) overflow-hidden">
+              <div
+                className="h-full bg-(--color-primary)"
+                style={{ width: `${Math.min(100, tail * 100)}%` }}
+              />
+            </div>
+            <span className="text-[12px] tabular-nums">{fmt.pct(tail)}</span>
           </div>
-          <span className="text-[12px] tabular-nums">{fmt.pct(r.cumShare)}</span>
-        </div>
-      ),
-      sortAccessor: (r) => r.cumShare,
-      exportValue: (r) => +(r.cumShare * 100).toFixed(2),
-      exportHeader: 'Накопл. доля, %',
+        );
+      },
+      sortAccessor: (r) => tailShare(r),
+      exportValue: (r) => +(tailShare(r) * 100).toFixed(2),
+      exportHeader: 'Доля от позиции и далее, %',
     },
   ];
 
