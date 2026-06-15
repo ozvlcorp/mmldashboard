@@ -165,18 +165,39 @@ export async function loadAnalytics(
     (n) => onProgress?.({ stage: 'assortment', count: n }),
   );
 
-  // Отгрузки с expand жирнее — берём меньшими страницами
+  // Продажи: тянем И обычные отгрузки (опт, b2b), И розничные продажи
+  // (касса МойСклад). У некоторых клиентов вся выручка идёт через
+  // /entity/retaildemand — без этого endpoint'а аналитика была бы пустой.
+  // Оба эндпоинта возвращают идентичную для нас структуру (positions,
+  // sum, agent, rate.currency), поэтому дальше обрабатываются единообразно.
   const qp = new URLSearchParams({
     filter: `moment>=${msMoment(from)};moment<=${msMoment(until)}`,
     expand: 'positions.assortment,agent,rate.currency',
     order: 'moment,asc',
   });
-  const demands = await fetchAllParallel<MsDemand>(
-    token,
-    `/entity/demand?${qp.toString()}`,
-    100,
-    (n) => onProgress?.({ stage: 'demands', count: n }),
-  );
+  let wholesale = 0;
+  let retail = 0;
+  const [demandsWholesale, demandsRetail] = await Promise.all([
+    fetchAllParallel<MsDemand>(
+      token,
+      `/entity/demand?${qp.toString()}`,
+      100,
+      (n) => {
+        wholesale = n;
+        onProgress?.({ stage: 'demands', count: wholesale + retail });
+      },
+    ),
+    fetchAllParallel<MsDemand>(
+      token,
+      `/entity/retaildemand?${qp.toString()}`,
+      100,
+      (n) => {
+        retail = n;
+        onProgress?.({ stage: 'demands', count: wholesale + retail });
+      },
+    ).catch(() => [] as MsDemand[]), // на аккаунтах без розницы endpoint может 404 — ок
+  ]);
+  const demands = [...demandsWholesale, ...demandsRetail];
 
   // Базовая валюта по мажоритарной валюте отгрузок (источник правды о
   // валюте учёта) + курсы для конвертации цен из карточек.
@@ -257,13 +278,23 @@ export async function loadComparison(
     filter: `moment>=${msMoment(previousFrom)};moment<=${msMoment(previousTo)}`,
     order: 'moment,asc',
   });
-  // Без expand — записи маленькие, можно тащить большими страницами
-  const demands = await fetchAllParallel<MsDemand>(
-    token,
-    `/entity/demand?${qp.toString()}`,
-    500,
-    onProgress ?? (() => {}),
-  );
+  // Без expand — записи маленькие, можно тащить большими страницами.
+  // Тянем И опт, И розницу (для розничных аккаунтов demand пуст).
+  const [demandsW, demandsR] = await Promise.all([
+    fetchAllParallel<MsDemand>(
+      token,
+      `/entity/demand?${qp.toString()}`,
+      500,
+      onProgress ?? (() => {}),
+    ),
+    fetchAllParallel<MsDemand>(
+      token,
+      `/entity/retaildemand?${qp.toString()}`,
+      500,
+      onProgress ?? (() => {}),
+    ).catch(() => [] as MsDemand[]),
+  ]);
+  const demands = [...demandsW, ...demandsR];
 
   const previousTurnover = demands.reduce((s, d) => s + (d.sum ?? 0), 0) / 100;
   return {
