@@ -255,13 +255,25 @@ export function HomeClient() {
     if (cached.assignee) setAssignee(cached.assignee);
     if (cached.time) setCacheTime(cached.time);
 
-    // Phase 3a: backend-snapshot mode — ?account=... в URL И backend
-    // сконфигурирован. Берём готовый snapshot из нашего API за ~200мс,
-    // вместо того чтобы тащить всё из МойСклад напрямую.
-    // Поведение opt-in: без URL-параметра идём по старому пути.
+    // Phase 3a: backend-snapshot mode — ?account=... в URL включает
+    // чтение готового snapshot из нашего API (~200мс) вместо прямого
+    // обращения в МойСклад (10-30с). Это opt-in через URL: если
+    // параметра нет, поведение не меняется.
     const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
     const accountFromUrl = url?.searchParams.get('account') || null;
-    if (accountFromUrl && isBackendEnabled()) {
+    if (accountFromUrl) {
+      if (!isBackendEnabled()) {
+        // Без NEXT_PUBLIC_BACKEND_URL в бандле виджет молча уехал бы в
+        // старый прямой путь — это не то что просил пользователь
+        // указавший ?account=. Показываем явную ошибку.
+        const msg =
+          '[backend] ?account=' + accountFromUrl + ' указан, но ' +
+          'NEXT_PUBLIC_BACKEND_URL не зашит в бандл при сборке. ' +
+          'Snapshot не загружен.';
+        console.error(msg);
+        setError('Backend URL не сконфигурирован при сборке');
+        return;
+      }
       void (async () => {
         try {
           setLoading(true);
@@ -271,9 +283,16 @@ export function HomeClient() {
             const now = new Date().toISOString();
             setCacheTime(now);
             writeCache(snap, null, null);
+          } else {
+            setError(
+              'Snapshot для account=' + accountFromUrl +
+              ' ещё не создан. Дождись sync воркера или дёрни POST /mml/sync.',
+            );
           }
         } catch (e) {
-          console.warn('[backend] fetchSnapshot failed:', e);
+          const m = e instanceof Error ? e.message : String(e);
+          console.warn('[backend] fetchSnapshot failed:', m);
+          setError('Не удалось загрузить snapshot: ' + m);
         } finally {
           setLoading(false);
         }

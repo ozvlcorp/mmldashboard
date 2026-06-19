@@ -65,12 +65,17 @@ services:
     build:
       context: ./widget
       dockerfile: Dockerfile
+      # NEXT_PUBLIC_* нужны на этапе сборки — Next.js инлайнит их в
+      # клиентский бандл. Передаём через build args, а не runtime env.
+      args:
+        NEXT_PUBLIC_BACKEND_URL: ${BACKEND_PUBLIC_URL:-}
     restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 3000
-      # Phase 3: виджет будет читать snapshots отсюда.
-      NEXT_PUBLIC_BACKEND_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8000}
+      # Тот же URL и в runtime — на случай если что-то читает его на
+      # сервере (например, серверный fetch в App Router).
+      NEXT_PUBLIC_BACKEND_URL: ${BACKEND_PUBLIC_URL:-}
     depends_on:
       - backend
     # Без секции ports — Traefik в Dokploy роутит домен mml.oymoysklad.com

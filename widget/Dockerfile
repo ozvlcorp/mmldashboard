@@ -12,6 +12,13 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Next.js инлайнит переменные NEXT_PUBLIC_* в клиентский бандл В МОМЕНТ
+# СБОРКИ. Значит они должны быть в env на этапе `npm run build`, а не
+# только в рантайме контейнера. Принимаем как build arg из docker-compose.
+ARG NEXT_PUBLIC_BACKEND_URL=""
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
