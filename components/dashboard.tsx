@@ -37,6 +37,7 @@ export function Dashboard({
   source,
   currency = 'сум',
   horizonDays = 10,
+  onChangeHorizon,
   debtorGroups,
   onScanDebtors,
   debtorsScanning,
@@ -69,6 +70,7 @@ export function Dashboard({
   source: 'demo' | 'moysklad' | 'upload';
   currency?: string;
   horizonDays?: number;
+  onChangeHorizon?: (n: number) => void;
   onScanDebtors?: () => void;
   debtorsScanning?: boolean;
   debtorsProgress?: string | null;
@@ -116,6 +118,8 @@ export function Dashboard({
           stores={stores}
           storeId={storeId}
           onChangeStore={onChangeStore}
+          horizonDays={horizonDays}
+          onChangeHorizon={onChangeHorizon}
           userName={userName ?? undefined}
           searchQuery={searchQuery}
           onChangeSearch={onChangeSearch}

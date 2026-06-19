@@ -136,6 +136,19 @@ export function HomeClient() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [cacheTime, setCacheTime] = React.useState<string | null>(null);
   const [comparison, setComparison] = React.useState<ComparisonResult | null>(null);
+  const [horizonDays, setHorizonDays] = React.useState<number>(() => {
+    if (typeof window === 'undefined') return 10;
+    const raw = localStorage.getItem('oy-horizon-days');
+    const n = raw ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(n) && n >= 1 && n <= 365 ? n : 10;
+  });
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('oy-horizon-days', String(horizonDays));
+    } catch {
+      /* quota */
+    }
+  }, [horizonDays]);
 
   const createTask = React.useCallback(
     async (d: DebtCandidate): Promise<{ taskId: string }> => {
@@ -441,7 +454,8 @@ export function HomeClient() {
         debtorGroups={isLive ? debtorGroups : []}
         source={isLive ? 'moysklad' : 'demo'}
         currency={currencySymbol}
-        horizonDays={10}
+        horizonDays={horizonDays}
+        onChangeHorizon={setHorizonDays}
         onScanDebtors={isLive ? scanDebtors : undefined}
         debtorsScanning={debtorsScanning}
         debtorsProgress={debtorsProgressLabel}

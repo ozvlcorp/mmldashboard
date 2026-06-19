@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { Search, Calendar, Check, X, Warehouse } from 'lucide-react';
+import { Search, Calendar, X, Warehouse, Clock } from 'lucide-react';
 import { useT } from '@/lib/i18n/provider';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { DateRangePopover } from '@/components/date-range-popover';
 
 export function Header({
   title,
@@ -15,6 +16,8 @@ export function Header({
   stores,
   storeId,
   onChangeStore,
+  horizonDays,
+  onChangeHorizon,
   userName,
   userRole,
   searchQuery = '',
@@ -29,6 +32,10 @@ export function Header({
   stores?: { id: string; name: string }[];
   storeId?: string;
   onChangeStore?: (id: string) => void;
+  /** Горизонт расчёта потенциальной/фактической прибыли в днях. */
+  horizonDays?: number;
+  /** Обработчик смены горизонта. Если не передан — контрол не показывается. */
+  onChangeHorizon?: (n: number) => void;
   userName?: string;
   userRole?: string;
   searchQuery?: string;
@@ -40,27 +47,6 @@ export function Header({
   const displayName = userName || 'Jamshid';
   const displayInitial = displayName.charAt(0).toUpperCase() || 'J';
 
-  // Локальные ставки дат: меняются мгновенно при выборе в календаре,
-  // но onChangePeriod вызывается только по кнопке «Применить» — иначе
-  // на каждое движение поля бил бы рефетч.
-  const [pendingFrom, setPendingFrom] = React.useState(fromDate ?? '');
-  const [pendingTo, setPendingTo] = React.useState(toDate ?? '');
-  React.useEffect(() => {
-    setPendingFrom(fromDate ?? '');
-  }, [fromDate]);
-  React.useEffect(() => {
-    setPendingTo(toDate ?? '');
-  }, [toDate]);
-  const dirty = pendingFrom !== (fromDate ?? '') || pendingTo !== (toDate ?? '');
-  const validRange = !!pendingFrom && !!pendingTo && pendingFrom <= pendingTo;
-  const applyPeriod = () => {
-    if (!onChangePeriod || !dirty || !validRange) return;
-    onChangePeriod(pendingFrom, pendingTo);
-  };
-  const resetPeriod = () => {
-    setPendingFrom(fromDate ?? '');
-    setPendingTo(toDate ?? '');
-  };
   return (
     <div className="sticky top-0 z-30 bg-(--color-bg)/85 backdrop-blur-md border-b border-(--color-border)">
       <div className="px-6 lg:px-8 py-4 flex items-center gap-4">
@@ -109,75 +95,21 @@ export function Header({
           </div>
 
           {interactive ? (
-            <div className="inline-flex items-center gap-1.5">
-              <div
-                className={
-                  'inline-flex items-center gap-1.5 rounded-lg border bg-(--color-card) px-2 h-9 ' +
-                  (dirty
-                    ? 'border-(--color-primary)/60 ring-1 ring-(--color-primary)/20'
-                    : 'border-(--color-border)')
-                }
-              >
-                <Calendar size={15} className="text-(--color-muted-fg)" />
-                <input
-                  type="date"
-                  value={pendingFrom}
-                  max={pendingTo || today}
-                  onChange={(e) => setPendingFrom(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      applyPeriod();
-                    }
-                  }}
-                  className="bg-transparent text-[12px] focus:outline-none"
-                  aria-label={t('connect.from')}
-                />
-                <span className="text-(--color-muted-fg)">—</span>
-                <input
-                  type="date"
-                  value={pendingTo}
-                  min={pendingFrom}
-                  max={today}
-                  onChange={(e) => setPendingTo(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      applyPeriod();
-                    }
-                  }}
-                  className="bg-transparent text-[12px] focus:outline-none"
-                  aria-label={t('connect.to')}
-                />
-              </div>
-              {dirty && (
-                <>
-                  <button
-                    type="button"
-                    onClick={applyPeriod}
-                    disabled={!validRange}
-                    title="Применить период"
-                    className="inline-flex items-center gap-1 h-9 rounded-lg bg-(--color-primary) px-2.5 text-[12px] font-semibold text-(--color-primary-fg) shadow-[0_2px_8px_rgba(74,101,255,0.25)] hover:bg-(--color-primary-hover) disabled:opacity-50"
-                  >
-                    <Check size={14} />
-                    Применить
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetPeriod}
-                    title="Отменить изменения"
-                    className="inline-flex items-center h-9 rounded-lg border border-(--color-border) bg-(--color-card) px-2 text-(--color-muted-fg) hover:bg-(--color-muted)"
-                  >
-                    <X size={14} />
-                  </button>
-                </>
-              )}
-            </div>
+            <DateRangePopover
+              from={fromDate!}
+              to={toDate!}
+              maxDate={today}
+              onApply={(f, t) => onChangePeriod!(f, t)}
+            />
           ) : (
             <div className="h-9 inline-flex items-center gap-2 px-3 rounded-lg bg-(--color-card) border border-(--color-border) text-[13px] font-medium opacity-70">
               <Calendar size={15} className="text-(--color-muted-fg)" />
               {t('app.period.30d')}
             </div>
+          )}
+
+          {onChangeHorizon && horizonDays != null && (
+            <HorizonInput value={horizonDays} onChange={onChangeHorizon} />
           )}
 
           {onChangeStore && stores && stores.length > 1 && (
@@ -217,6 +149,38 @@ export function Header({
         </div>
       </div>
     </div>
+  );
+}
+
+function HorizonInput({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const [draft, setDraft] = React.useState(String(value));
+  React.useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const n = Math.max(1, Math.min(365, parseInt(draft, 10) || value));
+    if (n !== value) onChange(n);
+    setDraft(String(n));
+  };
+  return (
+    <label
+      className="inline-flex items-center gap-1.5 h-9 rounded-lg border border-(--color-border) bg-(--color-card) px-2.5 text-[12px]"
+      title="Горизонт расчёта прибыли в днях"
+    >
+      <Clock size={14} className="text-(--color-muted-fg)" />
+      <input
+        type="number"
+        min={1}
+        max={365}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+        className="w-12 bg-transparent text-[12px] tabular-nums focus:outline-none text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        aria-label="Горизонт, дней"
+      />
+      <span className="text-(--color-muted-fg)">дн.</span>
+    </label>
   );
 }
 

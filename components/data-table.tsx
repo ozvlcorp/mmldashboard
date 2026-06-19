@@ -169,22 +169,25 @@ export function DataTable<T>({
           )}
         </div>
       )}
-      <div className="overflow-x-auto scrollbar-thin">
+      <div
+        className="scrollbar-thin"
+        style={{ maxHeight: 'min(70vh, 720px)', overflow: 'auto' }}
+      >
         <table className="w-full text-[14px]" style={{ tableLayout: 'fixed' }}>
           <colgroup>
             {visibleColumns.map((c) => (
               <col key={c.key} style={{ width: widths[c.key] ?? c.width }} />
             ))}
           </colgroup>
-          <thead>
-            <tr className="border-b border-(--color-border-soft)">
+          <thead className="sticky top-0 z-10 bg-(--color-card) shadow-[0_1px_0_var(--color-border-soft)]">
+            <tr>
               {visibleColumns.map((c, i) => {
                 const isLast = i === visibleColumns.length - 1;
                 return (
                   <th
                     key={c.key}
                     className={cn(
-                      'group relative px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-(--color-muted-fg) whitespace-nowrap overflow-hidden',
+                      'group relative px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-(--color-muted-fg) whitespace-nowrap overflow-hidden bg-(--color-card)',
                       c.align === 'right' && 'text-right',
                       c.align === 'center' && 'text-center',
                       c.align !== 'right' && c.align !== 'center' && 'text-left',

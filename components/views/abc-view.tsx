@@ -152,6 +152,7 @@ export function AbcView({
             label={t('kpi.classA')}
             value={`${groups.A.count}`}
             hint={`${fmt.pct(groups.A.share)} выручки · ${fmt.pct(pctOfTotal(groups.A.count) / 100)} товаров · ${fmt.money(groups.A.value, currency)}`}
+            tooltip="Класс A — товары, дающие до 80% выручки. Фактическая доля может быть меньше 80% — границу задаёт следующий товар, который перевалил бы порог."
             icon={Crown}
             accent="emerald"
             onClick={() => toggleClass('A')}
@@ -165,6 +166,7 @@ export function AbcView({
             label={t('kpi.classB')}
             value={`${groups.B.count}`}
             hint={`${fmt.pct(groups.B.share)} выручки · ${fmt.pct(pctOfTotal(groups.B.count) / 100)} товаров · ${fmt.money(groups.B.value, currency)}`}
+            tooltip="Класс B — товары между 80% и 95% выручки (≈15% сверху). Поддерживать запас, но без особого приоритета."
             icon={Award}
             accent="amber"
             onClick={() => toggleClass('B')}
@@ -178,6 +180,7 @@ export function AbcView({
             label={t('kpi.classC')}
             value={`${groups.C.count}`}
             hint={`${fmt.pct(groups.C.share)} выручки · ${fmt.pct(pctOfTotal(groups.C.count) / 100)} товаров · ${fmt.money(groups.C.value, currency)}`}
+            tooltip="Класс C — последние 5% выручки. Часто кандидаты на вывод из ассортимента или минимизацию запасов."
             icon={AlertOctagon}
             accent="rose"
             onClick={() => toggleClass('C')}
