@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
 from .routers import vendor, token, admin
+from .config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -30,7 +31,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origin_list,
     allow_methods=["*"],
     allow_headers=["*"],
 )
