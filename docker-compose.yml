@@ -44,20 +44,22 @@ services:
       - "8000"
 
   # ──────────────────────────────────────────────────────────────────
-  # Worker появится в Phase 2 — фоновая синхронизация МойСклад.
-  # Закомментировано чтобы compose поднимался уже сейчас, без воркера.
+  # Worker: scheduler-loop, который каждые 30 минут синхронизирует
+  # каждый зарегистрированный (widget, account). Тот же образ что и
+  # backend, отличается только командой.
   # ──────────────────────────────────────────────────────────────────
-  # worker:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   restart: unless-stopped
-  #   command: python -m app.worker.scheduler
-  #   environment:
-  #     DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-oysuite}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-oysuite}
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: python -m app.worker.scheduler
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-oysuite}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-oysuite}
+      # Worker не принимает HTTP, ADMIN_SECRET/CORS ему не нужны.
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   widget:
     build:
