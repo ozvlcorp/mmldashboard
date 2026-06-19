@@ -25,6 +25,7 @@ import {
 } from '@/lib/moysklad/browser';
 import type { DebtCandidate } from '@/lib/moysklad/debts';
 import { buildShopContext } from '@/lib/ai/context';
+import { fetchSnapshot, isBackendEnabled } from '@/lib/api/snapshot';
 import {
   DEMO_INVENTORY,
   DEMO_ABC,
@@ -253,6 +254,32 @@ export function HomeClient() {
     if (cached.debtors) setDebtors(cached.debtors);
     if (cached.assignee) setAssignee(cached.assignee);
     if (cached.time) setCacheTime(cached.time);
+
+    // Phase 3a: backend-snapshot mode — ?account=... в URL И backend
+    // сконфигурирован. Берём готовый snapshot из нашего API за ~200мс,
+    // вместо того чтобы тащить всё из МойСклад напрямую.
+    // Поведение opt-in: без URL-параметра идём по старому пути.
+    const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
+    const accountFromUrl = url?.searchParams.get('account') || null;
+    if (accountFromUrl && isBackendEnabled()) {
+      void (async () => {
+        try {
+          setLoading(true);
+          const snap = await fetchSnapshot(accountFromUrl);
+          if (snap) {
+            setData(snap);
+            const now = new Date().toISOString();
+            setCacheTime(now);
+            writeCache(snap, null, null);
+          }
+        } catch (e) {
+          console.warn('[backend] fetchSnapshot failed:', e);
+        } finally {
+          setLoading(false);
+        }
+      })();
+      return; // в backend-режиме НЕ зовём loadAnalytics; всё через snapshot
+    }
 
     const token = sessionStorage.getItem(TOKEN_KEY);
     const paramsRaw = sessionStorage.getItem(PARAMS_KEY);
