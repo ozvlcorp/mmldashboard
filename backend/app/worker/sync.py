@@ -18,7 +18,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import select
@@ -37,6 +37,11 @@ from ..moysklad.transform import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """Naive UTC — для совместимости с DateTime без tz в моделях."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -70,7 +75,7 @@ async def sync_tenant(
     Бросает исключение если что-то критично сломалось.
     """
     started = time.monotonic()
-    until = datetime.utcnow()
+    until = _utcnow()
     from_ = until - timedelta(days=period_days)
     from_iso = from_.strftime("%Y-%m-%d %H:%M:%S")
     until_iso = until.strftime("%Y-%m-%d %H:%M:%S")
@@ -147,7 +152,7 @@ async def sync_tenant(
         stmt = stmt.on_conflict_do_update(
             constraint="uq_mml_snapshots_key",
             set_={
-                "snapshot_at": datetime.utcnow(),
+                "snapshot_at": _utcnow(),
                 "inventory": stmt.excluded.inventory,
                 "abc": stmt.excluded.abc,
                 "xyz": stmt.excluded.xyz,
@@ -187,7 +192,7 @@ async def _save_sync_state(
     error: Optional[str],
     increment_count: bool = False,
 ):
-    now = datetime.utcnow()
+    now = _utcnow()
     next_after = now + timedelta(minutes=30) if status == "ok" else now + timedelta(minutes=5)
     stmt = insert(MmlSyncState).values(
         widget_name=widget_name,

@@ -22,7 +22,7 @@ import asyncio
 import logging
 import signal
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
 from sqlalchemy import and_, delete, or_, select
@@ -40,10 +40,16 @@ SYNC_INTERVAL = timedelta(minutes=30)
 MAX_PARALLEL_SYNCS = 5
 CLEANUP_INTERVAL = timedelta(hours=24)
 SNAPSHOT_RETENTION = timedelta(days=90)
+HEARTBEAT_INTERVAL = timedelta(minutes=5)  # лог-биение даже если синков нет
 
 # Семафор расшаривается между всеми тиками — даже если один sync
 # затянулся на 5 минут, следующие будут ждать пока освободится слот.
 _sync_semaphore = asyncio.Semaphore(MAX_PARALLEL_SYNCS)
+
+
+def utcnow() -> datetime:
+    """Naive UTC — для сравнения с DateTime колонками без tz в моделях."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 async def find_due_tenants(now: datetime) -> list[tuple[str, str]]:
@@ -100,7 +106,7 @@ async def run_one(widget: str, account: str) -> None:
 
 async def cleanup_old_snapshots() -> int:
     """Удаляет snapshots старше SNAPSHOT_RETENTION. Возвращает число удалённых."""
-    cutoff = datetime.utcnow() - SNAPSHOT_RETENTION
+    cutoff = utcnow() - SNAPSHOT_RETENTION
     async with AsyncSessionLocal() as db:
         # Сначала посчитаем сколько удалим — для лога
         count_q = select(MmlSnapshot.id).where(MmlSnapshot.snapshot_at < cutoff)
@@ -112,14 +118,15 @@ async def cleanup_old_snapshots() -> int:
         return len(ids_to_delete)
 
 
-async def sync_tick() -> None:
-    """Один проход: найти подходящих, запустить параллельно."""
-    now = datetime.utcnow()
+async def sync_tick() -> int:
+    """Один проход: найти подходящих, запустить параллельно. Возвращает число запущенных."""
+    now = utcnow()
     due = await find_due_tenants(now)
     if not due:
-        return
+        return 0
     logger.info("tick: %d tenants due for sync", len(due))
     await asyncio.gather(*(run_one(w, a) for w, a in due), return_exceptions=True)
+    return len(due)
 
 
 async def cleanup_loop() -> None:
@@ -136,13 +143,34 @@ async def cleanup_loop() -> None:
 
 
 async def sync_loop() -> None:
-    """Бесконечный цикл sync — каждые TICK_SECONDS секунд проверяем кому пора."""
+    """
+    Бесконечный цикл sync — каждые TICK_SECONDS секунд проверяем кому пора.
+    Раз в HEARTBEAT_INTERVAL пишем «жив», чтобы оператор видел в логах.
+    """
+    last_heartbeat = utcnow()
+    total_synced = 0
     while True:
         try:
-            await sync_tick()
+            synced = await sync_tick()
+            total_synced += synced
         except Exception:
             logger.exception("sync_tick failed")
+        # Heartbeat: тикаем тихо, но раз в N минут говорим что живы.
+        if utcnow() - last_heartbeat >= HEARTBEAT_INTERVAL:
+            tokens_total = await _count_tokens()
+            logger.info(
+                "heartbeat: alive, %d tokens registered, %d syncs done this hour",
+                tokens_total, total_synced,
+            )
+            last_heartbeat = utcnow()
+            total_synced = 0
         await asyncio.sleep(TICK_SECONDS)
+
+
+async def _count_tokens() -> int:
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy import func
+        return (await db.execute(select(func.count()).select_from(AppToken))).scalar_one()
 
 
 async def main() -> None:
