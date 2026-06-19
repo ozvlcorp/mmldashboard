@@ -1,0 +1,76 @@
+# Production-style стек для Dokploy.
+# Один файл поднимает: Postgres (общий) + backend (FastAPI) + worker
+# (фоновая синхронизация, будет добавлен в Phase 2) + widget (Next.js).
+#
+# Локально:   docker compose up
+# В Dokploy:  выбрать тип сборки «Docker Compose», указать этот файл,
+#             прописать переменные окружения из .env.example в секции
+#             Environment Variables проекта.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-oysuite}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-oysuite}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-oysuite}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Порт НЕ пробрасываем наружу — доступ только из docker network.
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-oysuite}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-oysuite}
+      ADMIN_SECRET: ${ADMIN_SECRET:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    # В Dokploy этот порт будет привязан к домену
+    # api.oymoysklad.com (или какой выберет владелец).
+
+  # ──────────────────────────────────────────────────────────────────
+  # Worker появится в Phase 2 — фоновая синхронизация МойСклад.
+  # Закомментировано чтобы compose поднимался уже сейчас, без воркера.
+  # ──────────────────────────────────────────────────────────────────
+  # worker:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   restart: unless-stopped
+  #   command: python -m app.worker.scheduler
+  #   environment:
+  #     DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-oysuite}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-oysuite}
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+
+  widget:
+    build:
+      context: ./widget
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Phase 3: виджет будет читать snapshots отсюда.
+      NEXT_PUBLIC_BACKEND_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8000}
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
