@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
-from .routers import vendor, token, admin, snapshot
+from .routers import vendor, token, admin, snapshot, sync
 from .config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -41,6 +41,7 @@ app.include_router(vendor.router)
 app.include_router(token.router)
 app.include_router(admin.router)
 app.include_router(snapshot.router)
+app.include_router(sync.router)
 
 
 @app.get("/health", tags=["Health"])
