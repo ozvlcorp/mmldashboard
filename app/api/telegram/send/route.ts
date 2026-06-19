@@ -1,20 +1,59 @@
 /**
- * Telegram webhook handler.
+ * Telegram-интеграция.
  *
- * GET /api/telegram/send?phone=...&text=...
+ * POST /api/telegram/send — основной путь.
+ *   Body: { botToken, chatId, text }
+ *   → Реально шлёт через Telegram Bot API. Возвращает JSON статус.
+ *   Используется кнопкой «Telegram» в Долгах и тестовым сообщением в Settings.
  *
- * Эта ссылка попадает в описание задачи МойСклад. Когда менеджер кликает,
- * браузер открывает её, мы парсим параметры и (в будущем) отправляем сообщение
- * через Telegram Bot API. Пока — stub: логируем и возвращаем подтверждение.
- *
- * Для подключения боевого бота:
- *   1. Получить токен от @BotFather.
- *   2. Сохранить в env: TELEGRAM_BOT_TOKEN.
- *   3. Завести таблицу phone → chat_id (т.к. Telegram не позволяет писать по номеру).
- *   4. Раскомментировать sendTelegramMessage() ниже.
+ * GET /api/telegram/send?phone=...&text=... — старый путь.
+ *   Открывается из задачи МойСклад. Без сохранённой конфигурации показывает
+ *   страницу-заглушку с инструкцией; в будущем можно подвязать к userspace.
  */
 
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
+
+const SendBody = z.object({
+  botToken: z.string().min(10),
+  chatId: z.string().min(1),
+  text: z.string().min(1).max(4096),
+});
+
+export async function POST(req: Request) {
+  let parsed;
+  try {
+    parsed = SendBody.parse(await req.json());
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : 'Bad request' },
+      { status: 400 },
+    );
+  }
+  const { botToken, chatId, text } = parsed;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+    });
+    const data = (await res.json().catch(() => null)) as
+      | { ok: boolean; description?: string; result?: { message_id: number } }
+      | null;
+    if (!res.ok || !data?.ok) {
+      return NextResponse.json(
+        { ok: false, error: data?.description ?? `Telegram API ${res.status}` },
+        { status: 502 },
+      );
+    }
+    return NextResponse.json({ ok: true, messageId: data.result?.message_id });
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : String(e) },
+      { status: 502 },
+    );
+  }
+}
 
 export async function GET(req: Request) {
   const url = new URL(req.url);

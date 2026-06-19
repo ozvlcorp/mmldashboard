@@ -37,8 +37,12 @@ export type MsProduct = {
   name: string;
   code?: string;
   article?: string;
-  buyPrice?: { value: number; currency: MsMeta };
-  salePrices?: Array<{ value: number; priceType: { name: string; meta: MsMeta } }>;
+  buyPrice?: { value: number; currency?: { meta: MsMeta } };
+  salePrices?: Array<{
+    value: number;
+    priceType: { name: string; meta: MsMeta };
+    currency?: { meta: MsMeta };
+  }>;
   uom?: { meta: MsMeta };
   attributes?: MsAttribute[];
   meta: MsMeta;
@@ -55,6 +59,8 @@ export type MsDemandPosition = {
   id: string;
   quantity: number;
   price: number;
+  /** Скидка по позиции в процентах (0–100). */
+  discount?: number;
   assortment: { meta: MsMeta; name?: string };
   meta: MsMeta;
 };
@@ -66,6 +72,15 @@ export type MsDemand = {
   sum: number;          // в копейках
   agent?: { meta: MsMeta; name?: string };
   positions?: { meta: MsMeta; rows?: MsDemandPosition[] };
+  /** Валюта документа — самый надёжный источник базовой валюты учёта. */
+  rate?: { currency?: { meta: MsMeta }; value?: number };
+  meta: MsMeta;
+};
+
+export type MsStore = {
+  id: string;
+  name: string;
+  archived?: boolean;
   meta: MsMeta;
 };
 
@@ -81,6 +96,8 @@ export type MsCounterparty = {
   phone?: string;
   email?: string;
   legalTitle?: string;
+  group?: { meta: MsMeta };
+  state?: { meta: MsMeta };
   meta: MsMeta;
 };
 

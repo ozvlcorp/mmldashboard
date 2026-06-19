@@ -5,7 +5,7 @@
 import type { InventoryInput } from '../analytics/inventory';
 import type { AbcInput } from '../analytics/abc';
 import type { XyzInput } from '../analytics/xyz';
-import type { RfmTransaction } from '../analytics/rfm';
+import type { RfmSegment, RfmTransaction } from '../analytics/rfm';
 import type { MsAssortmentItem, MsAttribute, MsDemand } from './types';
 
 /**
@@ -16,6 +16,12 @@ import type { MsAssortmentItem, MsAttribute, MsDemand } from './types';
  * передайте его имя или ID в `normDaysAttribute` — значение возьмётся оттуда.
  * Иначе используется `defaultNormDays`.
  */
+/** Валюта с множителем к базовой: 1 ед. = toBase базовых (база = 1). */
+export type CurrencyRate = { id: string; symbol: string; toBase: number };
+
+/** Себестоимость единицы товара по ФИФО из отчёта прибыльности. */
+export type ProfitInfo = { costPerUnit: number; sellQuantity: number };
+
 export function assortmentToInventory(
   items: MsAssortmentItem[],
   demands: MsDemand[],
@@ -24,6 +30,10 @@ export function assortmentToInventory(
     defaultNormDays?: number;
     priceTypeName?: string;
     normDaysAttribute?: string; // имя или ID кастомного атрибута
+    /** Карта currencyId → { symbol, toBase } для конвертации в базовую валюту. */
+    currencyById?: Map<string, CurrencyRate>;
+    /** ФИФО-себестоимость единицы по каждому товару (из /report/profit). */
+    profitByProduct?: Map<string, ProfitInfo>;
   } = { periodDays: 30 },
 ): InventoryInput[] {
   const fallbackNorm = opts.defaultNormDays ?? 10;
@@ -36,9 +46,35 @@ export function assortmentToInventory(
     }
   }
 
+  // currency.meta.href в API МойСклад; берём id валюты и ищем курс
+  const lookupRate = (href: string | undefined): CurrencyRate | undefined => {
+    if (!href || !opts.currencyById) return undefined;
+    const id = extractAssortmentId(href);
+    if (!id) return undefined;
+    return opts.currencyById.get(id);
+  };
+
   return items.map((it) => {
-    const cost = (it.buyPrice?.value ?? 0) / 100;
-    const sale = pickSalePrice(it, opts.priceTypeName) / 100;
+    const buyRate = lookupRate(it.buyPrice?.currency?.meta?.href);
+    const salePicked = pickSalePrice(it, opts.priceTypeName);
+    const saleRate = lookupRate(salePicked.currencyHref);
+
+    // Исходные цены в валюте карточки
+    const costOriginal = (it.buyPrice?.value ?? 0) / 100;
+    const saleOriginal = salePicked.value / 100;
+
+    // Конвертируем в базовую валюту аккаунта — только так маржа/наценка корректны
+    const buyMul = buyRate?.toBase ?? 1;
+    const saleMul = saleRate?.toBase ?? 1;
+    const sale = saleOriginal * saleMul;
+    // СЕБЕСТОИМОСТЬ: приоритет — ФИФО из /report/profit/byproduct
+    // (реальная стоимость партий списания, а не «buyPrice в карточке»,
+    // которую часто не обновляют). Fallback — buyPrice × курс.
+    const fifo = opts.profitByProduct?.get(it.id);
+    const cost = fifo && fifo.costPerUnit > 0 ? fifo.costPerUnit : costOriginal * buyMul;
+    const costFromFifo = fifo != null && fifo.costPerUnit > 0;
+    const converted = buyMul !== 1 || saleMul !== 1;
+
     const sold = salesByProduct.get(it.id) ?? 0;
     const avgDaily = opts.periodDays > 0 ? sold / opts.periodDays : 0;
     const normDays = extractNormDays(it.attributes, opts.normDaysAttribute, fallbackNorm);
@@ -50,6 +86,12 @@ export function assortmentToInventory(
       salePrice: sale,
       avgDailySales: avgDaily,
       normDays,
+      buyCurrency: buyRate?.symbol,
+      saleCurrency: saleRate?.symbol,
+      costPriceOriginal: costOriginal,
+      salePriceOriginal: saleOriginal,
+      converted,
+      costFromFifo,
     };
   });
 }
@@ -78,13 +120,23 @@ export function extractNormDays(
   return fallback;
 }
 
-function pickSalePrice(item: MsAssortmentItem, priceTypeName?: string): number {
+function pickSalePrice(
+  item: MsAssortmentItem,
+  priceTypeName?: string,
+): { value: number; currencyHref?: string } {
   const prices = item.salePrices ?? [];
   if (priceTypeName) {
     const match = prices.find((p) => p.priceType?.name === priceTypeName);
-    if (match) return match.value;
+    if (match) return { value: match.value, currencyHref: match.currency?.meta?.href };
   }
-  return prices[0]?.value ?? 0;
+  // Берём первую НЕНУЛЕВУЮ цену — иначе пустой тип цены (например "Цена для
+  // сайта" с value=0 в другой валюте) перебивает реальную «Цена продажи».
+  const firstPositive = prices.find((p) => (p?.value ?? 0) > 0);
+  if (firstPositive) {
+    return { value: firstPositive.value, currencyHref: firstPositive.currency?.meta?.href };
+  }
+  const first = prices[0];
+  return { value: first?.value ?? 0, currencyHref: first?.currency?.meta?.href };
 }
 
 function extractAssortmentId(href: string | undefined): string | null {
@@ -100,7 +152,12 @@ export function demandsToAbc(demands: MsDemand[]): AbcInput[] {
     for (const p of d.positions?.rows ?? []) {
       const id = extractAssortmentId(p.assortment?.meta?.href);
       if (!id) continue;
-      const value = (p.price * p.quantity) / 100;
+      // MoySklad хранит position.price в базовой валюте аккаунта (отчёты
+      // «Сумма продаж» опираются именно на это значение), поэтому
+      // дополнительная конвертация не нужна и только искажает картину.
+      // Учитываем только скидку позиции (если задана в процентах).
+      const discountFraction = Math.min(Math.max(p.discount ?? 0, 0), 100) / 100;
+      const value = (p.price * p.quantity * (1 - discountFraction)) / 100;
       const prev = map.get(id);
       if (prev) {
         prev.value += value;
@@ -149,14 +206,67 @@ export function demandsToXyz(
   return [...map.entries()].map(([id, v]) => ({ id, name: v.name, periods: v.periods }));
 }
 
-/** Каждая отгрузка → одна RFM-транзакция (агент = клиент) */
-export function demandsToRfm(demands: MsDemand[]): RfmTransaction[] {
+/**
+ * Маппинг названий статусов контрагентов МойСклад → внутренний RfmSegment.
+ * Регистронезависимо, с учётом сокращений (например «Потенц. лояльные»).
+ */
+const MS_STATUS_TO_SEGMENT: Array<[RegExp, RfmSegment]> = [
+  [/^чемпион/i, 'Champions'],
+  [/^потерян/i, 'Lost'],
+  [/^спящ/i, 'Hibernating'],
+  [/^в\s*зоне\s*риска|^риск/i, 'At Risk'],
+  [/^требу/i, 'Need Attention'],
+  [/^перспектив/i, 'Promising'],
+  [/^новые|^new/i, 'New'],
+  [/^потенц/i, 'Potential Loyal'],
+  [/^лояльн/i, 'Loyal'],
+];
+
+export function mapMsStatusToSegment(name: string | undefined): RfmSegment | undefined {
+  if (!name) return undefined;
+  const n = name.trim();
+  for (const [re, seg] of MS_STATUS_TO_SEGMENT) {
+    if (re.test(n)) return seg;
+  }
+  return undefined;
+}
+
+/** Курс валюты к базовой (без поиска по карте). */
+type CurrencyMap = Map<string, { symbol: string; toBase: number }>;
+
+/** Каждая отгрузка → одна RFM-транзакция (агент = клиент).
+ *
+ * d.sum хранится в **валюте документа** (отгрузка в долларах = сумма в $).
+ * Возвращаем сырую сумму + символ валюты + сконвертированную в базовую
+ * сумму (для расчёта M-score и сортировки).
+ * customerSegmentByAgentId — жёсткое назначение сегмента по статусу
+ * контрагента из МойСклад (override автоматики).
+ */
+export function demandsToRfm(
+  demands: MsDemand[],
+  customerSegmentByAgentId?: Map<string, RfmSegment>,
+  currencyById?: CurrencyMap,
+  baseSymbol?: string,
+): RfmTransaction[] {
   return demands
     .filter((d) => d.agent?.meta?.href)
-    .map((d) => ({
-      customerId: extractAssortmentId(d.agent!.meta.href) ?? d.agent!.meta.href,
-      customerName: d.agent?.name,
-      date: d.moment,
-      amount: d.sum / 100,
-    }));
+    .map((d) => {
+      const agentId = extractAssortmentId(d.agent!.meta.href) ?? d.agent!.meta.href;
+      const amount = d.sum / 100;
+      // Валюта документа: пробуем currencyById; если документ в базовой —
+      // получим её же; если currency.meta отсутствует — fallback на base.
+      const curId = extractAssortmentId(d.rate?.currency?.meta?.href) ?? '';
+      const cur = currencyById?.get(curId);
+      const symbol = cur?.symbol ?? baseSymbol ?? '';
+      const toBase = cur?.toBase ?? 1;
+      return {
+        customerId: agentId,
+        customerName: d.agent?.name,
+        date: d.moment,
+        amount,
+        currency: symbol,
+        amountBase: amount * toBase,
+        customerSegment: customerSegmentByAgentId?.get(agentId),
+      };
+    });
 }

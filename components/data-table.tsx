@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Download } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InfoHint } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ export function DataTable<T>({
   tableId,
   exportName,
   toolbar,
+  pageSize = 100,
 }: {
   data: T[];
   columns: Column<T>[];
@@ -46,6 +47,8 @@ export function DataTable<T>({
   exportName?: string;
   /** Произвольный элемент справа от тулбара (фильтры и пр.) */
   toolbar?: React.ReactNode;
+  /** Сколько строк на страницу. По умолчанию 100. 0 — без пагинации. */
+  pageSize?: number;
 }) {
   const [sort, setSort] = React.useState<{ key: string; dir: 'asc' | 'desc' } | null>(
     defaultSort ?? null,
@@ -120,6 +123,24 @@ export function DataTable<T>({
 
   const visibleColumns = React.useMemo(() => columns.filter((c) => !c.hidden), [columns]);
 
+  const [page, setPage] = React.useState(0);
+  const totalRows = sorted.length;
+  const totalPages = pageSize > 0 ? Math.max(1, Math.ceil(totalRows / pageSize)) : 1;
+  // если фильтр/сортировка уменьшили число строк — возвращаемся на валидную страницу
+  React.useEffect(() => {
+    if (page > totalPages - 1) setPage(0);
+  }, [totalPages, page]);
+
+  const pageRows = React.useMemo(() => {
+    if (pageSize <= 0) return sorted;
+    const start = page * pageSize;
+    return sorted.slice(start, start + pageSize);
+  }, [sorted, page, pageSize]);
+
+  const showPagination = pageSize > 0 && totalRows > pageSize;
+  const firstRowOnPage = totalRows === 0 ? 0 : page * pageSize + 1;
+  const lastRowOnPage = Math.min(totalRows, (page + 1) * pageSize);
+
   const handleExport = () => {
     if (!exportName) return;
     const exportCols: ExportColumn<T>[] = columns
@@ -148,22 +169,25 @@ export function DataTable<T>({
           )}
         </div>
       )}
-      <div className="overflow-x-auto scrollbar-thin">
+      <div
+        className="scrollbar-thin"
+        style={{ maxHeight: 'min(70vh, 720px)', overflow: 'auto' }}
+      >
         <table className="w-full text-[14px]" style={{ tableLayout: 'fixed' }}>
           <colgroup>
             {visibleColumns.map((c) => (
               <col key={c.key} style={{ width: widths[c.key] ?? c.width }} />
             ))}
           </colgroup>
-          <thead>
-            <tr className="border-b border-(--color-border-soft)">
+          <thead className="sticky top-0 z-10 bg-(--color-card) shadow-[0_1px_0_var(--color-border-soft)]">
+            <tr>
               {visibleColumns.map((c, i) => {
                 const isLast = i === visibleColumns.length - 1;
                 return (
                   <th
                     key={c.key}
                     className={cn(
-                      'group relative px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-(--color-muted-fg) whitespace-nowrap overflow-hidden',
+                      'group relative px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-(--color-muted-fg) whitespace-nowrap overflow-hidden bg-(--color-card)',
                       c.align === 'right' && 'text-right',
                       c.align === 'center' && 'text-center',
                       c.align !== 'right' && c.align !== 'center' && 'text-left',
@@ -209,9 +233,9 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((row, i) => (
+            {pageRows.map((row, i) => (
               <tr
-                key={rowKey(row, i)}
+                key={rowKey(row, page * pageSize + i)}
                 className="border-b border-(--color-border-soft) last:border-b-0 hover:bg-(--color-muted)/50 transition-colors"
               >
                 {visibleColumns.map((c) => (
@@ -241,6 +265,50 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
+      {showPagination && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-(--color-border-soft) px-6 py-3 text-[12px] text-(--color-muted-fg)">
+          <div>
+            {firstRowOnPage}–{lastRowOnPage} из {totalRows}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setPage(0)}
+              disabled={page === 0}
+              className="rounded-md px-2 py-1 text-[12px] font-semibold hover:bg-(--color-muted) disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              «
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="inline-flex items-center gap-1 rounded-md border border-(--color-border) bg-(--color-card) px-2 py-1 text-[12px] font-medium hover:bg-(--color-muted) disabled:opacity-40 disabled:hover:bg-(--color-card)"
+            >
+              <ChevronLeft size={13} /> Назад
+            </button>
+            <span className="px-2 font-medium text-(--color-fg) tabular-nums">
+              {page + 1} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="inline-flex items-center gap-1 rounded-md border border-(--color-border) bg-(--color-card) px-2 py-1 text-[12px] font-medium hover:bg-(--color-muted) disabled:opacity-40 disabled:hover:bg-(--color-card)"
+            >
+              Вперёд <ChevronRight size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage(totalPages - 1)}
+              disabled={page >= totalPages - 1}
+              className="rounded-md px-2 py-1 text-[12px] font-semibold hover:bg-(--color-muted) disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              »
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

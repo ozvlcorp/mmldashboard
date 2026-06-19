@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Boxes,
   Wallet,
@@ -39,10 +39,12 @@ export function InventoryView({
   inputs,
   horizonDays = 10,
   currency = 'сум',
+  turnoverTrend,
 }: {
   inputs: InventoryInput[];
   horizonDays?: number;
   currency?: string;
+  turnoverTrend?: { value: number; positive?: boolean };
 }) {
   const { t } = useT();
   const report = useMemo(() => buildInventoryReport(inputs, { horizonDays }), [
@@ -50,6 +52,64 @@ export function InventoryView({
     horizonDays,
   ]);
   const { rows, totals } = report;
+
+  type FilterKind = 'stock' | 'income' | 'mml' | 'oos' | 'frozen';
+  const FILTERS: Record<
+    FilterKind,
+    {
+      label: string;
+      predicate: (r: InventoryRow) => boolean;
+      sort: { key: string; dir: 'asc' | 'desc' };
+    }
+  > = {
+    stock: {
+      label: 'есть на складе',
+      predicate: (r) => r.stockValue > 0,
+      sort: { key: 'stockValue', dir: 'desc' },
+    },
+    income: {
+      label: 'приносят доход',
+      predicate: (r) => r.dailyGross > 0,
+      sort: { key: 'daily', dir: 'desc' },
+    },
+    mml: {
+      label: '★ MML — топ выручки',
+      predicate: (r) => r.mmlFlag,
+      sort: { key: 'daily', dir: 'desc' },
+    },
+    oos: {
+      label: 'есть потери OOS',
+      predicate: (r) => r.oosLoss > 0,
+      sort: { key: 'oosFrozen', dir: 'asc' },
+    },
+    frozen: {
+      label: 'заморожен капитал',
+      predicate: (r) => r.frozenMoney > 0,
+      sort: { key: 'oosFrozen', dir: 'desc' },
+    },
+  };
+
+  const tableRef = useRef<HTMLDivElement>(null);
+  const [filter, setFilter] = useState<FilterKind | null>(null);
+  const [tableSort, setTableSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({
+    key: 'stockValue',
+    dir: 'desc',
+  });
+
+  const displayedRows = useMemo(
+    () => (filter ? rows.filter(FILTERS[filter].predicate) : rows),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, filter],
+  );
+
+  const toggleFilter = (k: FilterKind) => {
+    setFilter((prev) => {
+      const next = prev === k ? null : k;
+      if (next) setTableSort(FILTERS[k].sort);
+      return next;
+    });
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const columns: Column<InventoryRow>[] = [
     {
@@ -60,20 +120,35 @@ export function InventoryView({
       minWidth: 160,
       render: (r) => (
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-(--color-primary-soft) text-(--color-primary-soft-fg) grid place-items-center text-[11px] font-bold shrink-0">
-            {r.name.slice(0, 2).toUpperCase()}
+          <div
+            className={
+              r.mmlFlag
+                ? 'w-8 h-8 rounded-lg bg-gradient-to-br from-(--color-primary) to-(--color-accent-5) text-white grid place-items-center text-[11px] font-bold shrink-0 shadow-[0_2px_8px_rgba(74,101,255,0.35)]'
+                : 'w-8 h-8 rounded-lg bg-(--color-primary-soft) text-(--color-primary-soft-fg) grid place-items-center text-[11px] font-bold shrink-0'
+            }
+          >
+            {r.mmlFlag ? '★' : r.name.slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <div className="font-semibold text-(--color-fg) text-[13px]">{r.name}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-(--color-fg) text-[13px] truncate">{r.name}</span>
+              {r.mmlFlag && (
+                <span
+                  title="Топ по выручке — даёт ~80% дохода. Не допускайте отсутствия на складе."
+                  className="shrink-0 rounded-md bg-(--color-primary-soft) px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-(--color-primary-soft-fg)"
+                >
+                  ★ MML
+                </span>
+              )}
+            </div>
             <div className="text-[11px] text-(--color-muted-fg)">
-              {r.mmlFlag && <span className="text-(--color-primary) font-medium">★ MML · </span>}
               {fmt.pct(r.share)} выручки
             </div>
           </div>
         </div>
       ),
       sortAccessor: (r) => r.name,
-      exportValue: (r) => r.name,
+      exportValue: (r) => (r.mmlFlag ? `★ ${r.name}` : r.name),
     },
     {
       key: 'stock',
@@ -84,7 +159,7 @@ export function InventoryView({
       render: (r) => (
         <div className="leading-tight">
           <div className="font-bold text-[15px]">{fmt.int(r.stock)} <span className="text-[12px] font-medium text-(--color-muted-fg)">шт</span></div>
-          <div className="text-[12px] text-(--color-muted-fg) mt-0.5">{fmt.money(r.stockValue)}</div>
+          <div className="text-[12px] text-(--color-muted-fg) mt-0.5">{fmt.money(r.stockValue, currency)}</div>
         </div>
       ),
       sortAccessor: (r) => r.stockValue,
@@ -132,27 +207,87 @@ export function InventoryView({
     {
       key: 'prices',
       header: 'Цена',
-      help: 'Цена продажи (вверху) и закупочная цена (внизу). Разница между ними — валовая прибыль с одной штуки.',
+      help: `Цена продажи (вверху) и себестоимость (внизу). Себестоимость берётся из отчёта прибыльности МойСклад по методу ФИФО — реальная стоимость партий списания, а не цена в карточке. Если ФИФО недоступна (товар не продавался в периоде), используется закупочная цена из карточки.`,
       align: 'right',
-      width: 130,
-      render: (r) => (
-        <div className="leading-tight">
-          <div className="font-bold text-[15px]">{fmt.money(r.salePrice)}</div>
-          <div className="text-[12px] text-(--color-muted-fg) mt-0.5">закуп. {fmt.money(r.costPrice)}</div>
-        </div>
-      ),
+      width: 180,
+      render: (r) => {
+        const saleCur = r.saleCurrency ?? currency;
+        const saleOrig = r.salePriceOriginal ?? r.salePrice;
+        const saleNeedsConv = saleCur !== currency;
+        const isFifo = r.costFromFifo === true;
+        const costLabel = isFifo ? 'себест.' : 'закуп.';
+        return (
+          <div className="leading-tight">
+            <div className="font-bold text-[15px]">
+              {fmt.money(saleOrig, saleCur, saleNeedsConv ? 2 : 0)}
+            </div>
+            {saleNeedsConv && (
+              <div className="text-[10.5px] text-(--color-muted-fg)/80">
+                ≈ {fmt.money(r.salePrice, currency)}
+              </div>
+            )}
+            <div
+              className="mt-0.5 text-[12px] text-(--color-muted-fg)"
+              title={isFifo ? 'ФИФО — фактическая себестоимость списания' : 'Из карточки товара (товар не продавался в периоде)'}
+            >
+              {costLabel} {fmt.money(r.costPrice, currency)}
+              {isFifo && (
+                <span className="ml-1 rounded bg-(--color-primary-soft) px-1 text-[10px] font-semibold text-(--color-primary-soft-fg)">
+                  ФИФО
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      },
       sortAccessor: (r) => r.salePrice,
+      exportValue: (r) => Math.round(r.salePriceOriginal ?? r.salePrice),
+      exportHeader: 'Цена продажи (карточка)',
+    },
+    {
+      key: 'saleCurrency',
+      header: 'Вал. продажи',
+      hidden: true,
+      align: 'left',
+      render: () => null,
+      exportValue: (r) => r.saleCurrency ?? currency,
+      exportHeader: 'Валюта продажи',
+    },
+    {
+      key: 'salePriceBase',
+      header: 'Прод. в базовой',
+      hidden: true,
+      align: 'right',
+      render: () => null,
       exportValue: (r) => Math.round(r.salePrice),
-      exportHeader: 'Цена продажи',
+      exportHeader: `Цена продажи в ${currency}`,
     },
     {
       key: 'cost',
-      header: 'Закуп.',
+      header: 'Закуп. (карточка)',
+      hidden: true,
+      align: 'right',
+      render: () => null,
+      exportValue: (r) => Math.round(r.costPriceOriginal ?? r.costPrice),
+      exportHeader: 'Цена закупки (карточка)',
+    },
+    {
+      key: 'buyCurrency',
+      header: 'Вал. закупки',
+      hidden: true,
+      align: 'left',
+      render: () => null,
+      exportValue: (r) => r.buyCurrency ?? currency,
+      exportHeader: 'Валюта закупки',
+    },
+    {
+      key: 'costPriceBase',
+      header: 'Закуп. в базовой',
       hidden: true,
       align: 'right',
       render: () => null,
       exportValue: (r) => Math.round(r.costPrice),
-      exportHeader: 'Цена закупки',
+      exportHeader: `Цена закупки в ${currency}`,
     },
     {
       key: 'margin',
@@ -185,7 +320,7 @@ export function InventoryView({
       help: 'Сколько прибыли в день приносит этот товар. Доход/день = (продажа − закупка) × средняя дневная продажа.',
       align: 'right',
       width: 120,
-      render: (r) => <span className="font-bold text-[15px]">{fmt.money(r.dailyGross)}</span>,
+      render: (r) => <span className="font-bold text-[15px]">{fmt.money(r.dailyGross, currency)}</span>,
       sortAccessor: (r) => r.dailyGross,
       exportValue: (r) => Math.round(r.dailyGross),
     },
@@ -197,9 +332,9 @@ export function InventoryView({
       width: 160,
       render: (r) =>
         r.oosLoss > 0 ? (
-          <Badge variant="danger">−{fmt.money(r.oosLoss)}</Badge>
+          <Badge variant="danger">−{fmt.money(r.oosLoss, currency)}</Badge>
         ) : r.frozenMoney > 0 ? (
-          <Badge variant="warning">{fmt.money(r.frozenMoney)} ❄</Badge>
+          <Badge variant="warning">{fmt.money(r.frozenMoney, currency)} ❄</Badge>
         ) : (
           <span className="text-(--color-muted-fg) text-[12px]">в норме</span>
         ),
@@ -218,69 +353,101 @@ export function InventoryView({
             label: t('kpi.stockValue'),
             value: fmt.money(totals.stockValue, currency),
             icon: Boxes, accent: 'indigo' as const,
-            trend: { value: 8.4, positive: true },
             spark: genSpark(totals.stockValue, 12, 0.08, 1),
+            tooltip: 'Сумма всех остатков по закупочным ценам',
+            advice: 'Клик — показать только товары которые сейчас на складе',
+            onClick: () => toggleFilter('stock'),
+            className: filter === 'stock' ? 'ring-2 ring-(--color-primary)/30' : '',
           },
           {
             label: t('kpi.dailyIncome'),
             value: fmt.money(totals.dailyGross, currency),
             hint: t('kpi.dailyIncomeHint', { days: horizonDays, value: fmt.money(totals.potentialProfit, currency) }),
             icon: TrendingUp, accent: 'emerald' as const,
-            trend: { value: 12.1, positive: true },
             spark: genSpark(totals.dailyGross, 12, 0.18, 2),
+            trend: turnoverTrend,
+            tooltip: 'Маржинальный доход в день: (цена − себестоимость) × средние продажи',
+            advice: 'Клик — показать только товары с продажами',
+            onClick: () => toggleFilter('income'),
+            className: filter === 'income' ? 'ring-2 ring-(--color-success)/40' : '',
           },
           {
-            label: t('kpi.mmlShare'), value: fmt.pct(totals.mmlShare),
-            hint: t('kpi.mmlHint'),
-            icon: Rocket, accent: 'violet' as const,
-            trend: { value: 3.2, positive: true },
+            label: t('kpi.mmlShare'),
+            value: fmt.pct(totals.mmlShare),
+            hint: filter === 'mml' ? t('kpi.mmlHintOn') : t('kpi.mmlHint'),
+            icon: Rocket,
+            accent: 'violet' as const,
             spark: genSpark(totals.mmlShare, 12, 0.05, 3),
+            tooltip: 'MML (Minimum Marketing List) — товары которые дают ~80% выручки. Их нельзя пускать в OOS.',
+            advice: 'Клик — показать только ★ MML-товары',
+            onClick: () => toggleFilter('mml'),
+            className: filter === 'mml' ? 'ring-2 ring-(--color-primary)/40' : '',
           },
           {
             label: t('kpi.oosLoss', { days: horizonDays }),
             value: fmt.money(totals.lostProfit, currency),
             icon: AlertTriangle, accent: 'rose' as const,
-            trend: { value: -15.8, positive: false },
             spark: genSpark(totals.lostProfit, 12, 0.25, 4),
+            tooltip: `Сколько прибыли потеряно из-за дефицита (OOS) за ${horizonDays} дней`,
+            advice: 'Клик — показать только товары с потерями OOS',
+            onClick: () => toggleFilter('oos'),
+            className: filter === 'oos' ? 'ring-2 ring-(--color-danger)/40' : '',
           },
           {
             label: t('kpi.frozen'), value: fmt.money(totals.frozenMoney, currency),
             hint: t('kpi.frozenHint', { pct: fmt.pct(totals.frozenShare) }),
             icon: Snowflake, accent: 'amber' as const,
-            trend: { value: -2.1, positive: false },
             spark: genSpark(totals.frozenMoney, 12, 0.05, 5),
+            tooltip: 'Капитал в товарах сверх норматива — лежит, продаётся медленно',
+            advice: 'Клик — показать только товары с замороженным капиталом',
+            onClick: () => toggleFilter('frozen'),
+            className: filter === 'frozen' ? 'ring-2 ring-(--color-warning)/40' : '',
           },
           {
             label: t('kpi.upliftAtZero'), value: `+${fmt.pct(totals.profitUpliftPct)}`,
             hint: t('kpi.upliftHint', { x: fmt.num(totals.profitUpliftX, 2) }),
             icon: Wallet, accent: 'cyan' as const,
-            trend: { value: 0, positive: true },
+            tooltip: 'Насколько выросла бы прибыль если устранить все OOS',
+            advice: 'Цель — приблизить к 0%: чем меньше дефицита, тем больше выручки',
           },
         ].map((k, i) => (
-          <div key={k.label} className={cn('oy-anim-card', `oy-stagger-${(i % 6) + 1}`)}>
+          <div key={k.label} className={cn('oy-anim-card h-full', `oy-stagger-${(i % 6) + 1}`)}>
             <KpiTile {...k} />
           </div>
         ))}
       </div>
 
-      <Card>
+      <Card ref={tableRef}>
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
               <CardTitle>Аналитика по товарам</CardTitle>
               <CardDescription>
-                {inputs.length} позиций · кликните по заголовку столбца для сортировки
+                {filter
+                  ? `${displayedRows.length} из ${inputs.length} · фильтр: ${FILTERS[filter].label}`
+                  : `${inputs.length} позиций · кликните по заголовку столбца для сортировки`}
               </CardDescription>
             </div>
-            <Badge variant="primary">{horizonDays} дн</Badge>
+            <div className="flex items-center gap-2">
+              {filter && (
+                <button
+                  onClick={() => setFilter(null)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-(--color-primary-soft) px-2 py-1 text-[11px] font-semibold text-(--color-primary-soft-fg) hover:bg-(--color-primary-soft)/70"
+                >
+                  Сбросить фильтр
+                </button>
+              )}
+              <Badge variant="primary">{horizonDays} дн</Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="px-0 py-0">
           <DataTable
-            data={rows}
+            key={`inv-${filter ?? 'all'}-${tableSort.key}-${tableSort.dir}`}
+            data={displayedRows}
             columns={columns}
             rowKey={(r) => r.id}
-            defaultSort={{ key: 'stockValue', dir: 'desc' }}
+            defaultSort={tableSort}
             tableId="inventory"
             exportName="OY_Analytics_Sklad"
             toolbar="Перетащите границу столбца чтобы изменить ширину"
@@ -377,8 +544,8 @@ export function InventoryView({
                       </div>
                       <div className="text-[12px] text-(--color-muted-fg) mt-0.5">
                         {r.oosLoss > 0
-                          ? `Дефицит. Заказать еще, теряете ${fmt.money(r.oosLoss)} за ${horizonDays} дн.`
-                          : `Излишек запаса. Заморожено ${fmt.money(r.frozenMoney)} (${fmt.pct(r.frozenShare)}).`}
+                          ? `Дефицит. Заказать еще, теряете ${fmt.money(r.oosLoss, currency)} за ${horizonDays} дн.`
+                          : `Излишек запаса. Заморожено ${fmt.money(r.frozenMoney, currency)} (${fmt.pct(r.frozenShare)}).`}
                       </div>
                     </div>
                   </div>

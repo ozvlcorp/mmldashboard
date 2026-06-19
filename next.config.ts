@@ -2,6 +2,8 @@ import type { NextConfig } from 'next';
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // standalone-сборка нужна для лёгкого Docker-образа (Dokploy)
+  output: 'standalone',
   async headers() {
     return [
       {
