@@ -36,10 +36,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "8000:8000"
-    # В Dokploy этот порт будет привязан к домену
-    # api.oymoysklad.com (или какой выберет владелец).
+    # Без секции ports — в Dokploy/Traefik роутинг идёт по доменам на
+    # внутренний порт 8000. Локально достучаться можно через
+    # `docker compose exec backend curl http://localhost:8000/health`
+    # или временно раскомментировать ports для отладки.
+    expose:
+      - "8000"
 
   # ──────────────────────────────────────────────────────────────────
   # Worker появится в Phase 2 — фоновая синхронизация МойСклад.
@@ -69,8 +71,10 @@ services:
       NEXT_PUBLIC_BACKEND_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8000}
     depends_on:
       - backend
-    ports:
-      - "3000:3000"
+    # Без секции ports — Traefik в Dokploy роутит домен mml.oymoysklad.com
+    # сразу на внутренний 3000. Хостовой порт никто не занимает.
+    expose:
+      - "3000"
 
 volumes:
   postgres_data:
