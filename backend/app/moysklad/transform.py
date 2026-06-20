@@ -1,9 +1,11 @@
 """
 Преобразование сырых данных МойСклад в формат для аналитики.
-Порт widget/lib/moysklad/transform.ts (только функции, нужные для
-sync_tenant первой версии — assortment_to_inventory, demands_to_abc,
-demands_to_xyz). RFM добавим в следующей сессии вместе с
-customer segments.
+Порт widget/lib/moysklad/transform.ts. Реализовано:
+  - assortment_to_inventory
+  - demands_to_abc
+  - demands_to_xyz
+  - demands_to_rfm
+Customer segments (статусы контрагентов из МойСклад) — Phase 3.
 """
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ from typing import Any, Optional
 
 from ..analytics.abc import AbcInput
 from ..analytics.inventory import InventoryInput
+from ..analytics.rfm import RfmTransaction
 from ..analytics.xyz import XyzInput
 
 _UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.I)
@@ -150,3 +153,33 @@ def _parse_ms_moment(s: str) -> datetime:
     except ValueError:
         # Если пришёл без миллисекунд
         return datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+
+
+def demands_to_rfm(demands: list[dict]) -> list[RfmTransaction]:
+    """
+    Каждая отгрузка → одна RFM-транзакция (agent = клиент). Порт
+    demandsToRfm из TS. Используем d.sum (в копейках) делим на 100 →
+    базовая валюта аккаунта. Демонстрации без agent отбрасываем —
+    встречаются на retaildemand с анонимной розничной продажей.
+    """
+    out: list[RfmTransaction] = []
+    for d in demands:
+        agent = d.get("agent") or {}
+        href = (agent.get("meta") or {}).get("href")
+        if not href:
+            continue
+        customer_id = extract_uuid(href) or href
+        moment_str = d.get("moment")
+        if not moment_str:
+            continue
+        try:
+            date = _parse_ms_moment(moment_str)
+        except Exception:
+            continue
+        out.append(RfmTransaction(
+            customer_id=customer_id,
+            customer_name=agent.get("name"),
+            date=date,
+            amount=(d.get("sum", 0) or 0) / 100,
+        ))
+    return out

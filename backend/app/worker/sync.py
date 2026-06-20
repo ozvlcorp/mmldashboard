@@ -27,12 +27,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..analytics.abc import build_abc_report
 from ..analytics.inventory import build_inventory_report
+from ..analytics.rfm import build_rfm_report
 from ..analytics.xyz import build_xyz_report
 from ..models import AppToken, MmlSnapshot, MmlSyncState
 from ..moysklad.client import MsClient
 from ..moysklad.transform import (
     assortment_to_inventory,
     demands_to_abc,
+    demands_to_rfm,
     demands_to_xyz,
 )
 
@@ -121,6 +123,9 @@ async def sync_tenant(
         xyz_inputs = demands_to_xyz(all_demands, until=until)
         xyz_rows = build_xyz_report(xyz_inputs)
 
+        rfm_txs = demands_to_rfm(all_demands)
+        rfm_rows = build_rfm_report(rfm_txs, reference_date=until)
+
         # 4. Build JSONB payload — структура зеркалит AnalyticsResult из widget
         meta = {
             "periodDays": period_days,
@@ -142,7 +147,7 @@ async def sync_tenant(
             inventory=_to_jsonable([dataclasses.asdict(r) for r in inv_report.rows]),
             abc=_to_jsonable([dataclasses.asdict(r) for r in abc_rows]),
             xyz=_to_jsonable([dataclasses.asdict(r) for r in xyz_rows]),
-            rfm=[],   # Phase 3
+            rfm=_to_jsonable([dataclasses.asdict(r) for r in rfm_rows]),
             debtors=None,
             meta=meta,
             products_count=len(assortment),
